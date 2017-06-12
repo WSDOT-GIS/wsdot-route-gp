@@ -16,11 +16,6 @@ class RouteIdSuffixType(object):
     has_i_suffix = 1
     has_d_suffix = 2
 
-    @staticmethod
-    def is_in_flags(flag_value, suffix_type):
-        return (flag_value & suffix_type) == suffix_type
-
-
 def standardize_route_id(route_id, route_id_suffix_type):
     """Converts a route ID string from an event table into
     the format used in the route layer.
@@ -97,11 +92,11 @@ def create_event_feature_class(event_table,
         Returns the path to the output feature class.
     """
 
-    # Ensure given event table and route layer exist.
-    if not arcpy.Exists(event_table):
-        raise FileNotFoundError(event_table)
-    elif not arcpy.Exists(route_layer):
-        raise FileNotFoundError(route_layer)
+    # # Ensure given event table and route layer exist.
+    # if not arcpy.Exists(event_table):
+    #     raise FileNotFoundError(event_table)
+    # elif not arcpy.Exists(route_layer):
+    #     raise FileNotFoundError(route_layer)
 
     # End measure is optional. If omitted, out geometry will be points.
     # Otherwise, output will be polyline.
@@ -120,8 +115,10 @@ def create_event_feature_class(event_table,
     # Create the output feature class.
     workspace, fc_name = split_path(out_fc)
     routes_desc = arcpy.Describe(route_layer)
-    arcpy.management.CreateFeatureclass(workspace, fc_name, out_geo_type, None,
-                                        has_m="Yes", spatial_reference=routes_desc.spatialReference)
+    # arcpy.management.CreateFeatureclass(workspace, fc_name, out_geo_type, None, "ENABLED",
+    #                                     "DISABLED", routes_desc.spatialReference)
+    arcpy.management.CreateFeatureclass(workspace, fc_name, out_geo_type,
+                                        spatial_reference=routes_desc.spatialReference)
     event_oid_field_name = "EventOid"
     arcpy.management.AddField(out_fc, event_oid_field_name, "LONG", field_alias="Event OID",
                               field_is_nullable=False, field_is_required=True)

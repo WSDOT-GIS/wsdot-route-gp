@@ -1,5 +1,8 @@
 """unit test for wsdotroute module
 """
+from __future__ import (unicode_literals, print_function, division,
+                        absolute_import)
+
 import unittest
 import os
 import re
@@ -51,6 +54,7 @@ class TestWsdotRoute(unittest.TestCase):
                                     "OID should be an int")
                     self.assertTrue(isinstance(shape, arcpy.Polyline),
                                     "Geometry should be a Polyline")
+                    self.assertGreater(shape.length, 0, "Length should be greater than 0")
 
         finally:
             if arcpy.Exists(table_path):
