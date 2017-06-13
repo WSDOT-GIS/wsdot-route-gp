@@ -16,15 +16,15 @@ class TestWsdotRoute(unittest.TestCase):
 
     def test_create_event_feature_class(self):
         # Create input event table
-        scratch_gdb = arcpy.env.scratchGDB
-        table_path = arcpy.CreateScratchName("Input", None, "Table", scratch_gdb)
+        workspace = "in_memory" #arcpy.env.scratchGDB
+        table_path = arcpy.CreateScratchName("Input", None, "Table", workspace)
         event_route_field = "RouteID"
         event_m_1_field = "BeginArm"
         event_m_2_field = "EndArm"
         route_layer_route_id_field = "RouteIdentifier"
         route_fc = os.path.join(os.path.split(__file__)[0], 'Sample.gdb', 'StateRouteLRS')
-        out_fc = os.path.join(scratch_gdb, arcpy.CreateScratchName(
-            "output", data_type="Feature Class", workspace=scratch_gdb))
+        out_fc = arcpy.CreateScratchName(
+            "output", data_type="Feature Class", workspace=workspace)
         try:
             arcpy.management.CreateTable(*os.path.split(table_path))
             arcpy.management.AddField(table_path, event_route_field, field_type="TEXT",
