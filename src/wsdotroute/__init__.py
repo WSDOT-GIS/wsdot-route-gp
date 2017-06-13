@@ -15,15 +15,17 @@ class RouteIdSuffixType(object):
     has_no_suffix = 0
     has_i_suffix = 1
     has_d_suffix = 2
+    has_both_i_and_d = 1 | 2
 
-def standardize_route_id(route_id, route_id_suffix_type):
+
+def standardize_route_id(route_id, route_id_suffix_type=RouteIdSuffixType.has_both_i_and_d):
     """Converts a route ID string from an event table into
     the format used in the route layer.
 
     Args:
         route_id: Route ID string from event table.
         route_id_suffix_type: Optional. Indicates what format the route_layer's route IDs are in.
-            See the RouteIdSuffixType values.
+            See the RouteIdSuffixType values. Defaults to RouteIdSUffixType.has_both_i_and_d.
 
     Returns:
         str: equivalent of the input route id in the output format.
@@ -62,6 +64,12 @@ def standardize_route_id(route_id, route_id_suffix_type):
         match = route_label_format_re.match(route_id)
         if not match:
             raise ValueError("Incorrectly formatted route_id: %s." % route_id)
+        # Pad route number to three digits.
+        unsuffixed_rid = match.group(1).rjust(3, "0")
+        if route_id_suffix_type & RouteIdSuffixType.has_i_suffix == RouteIdSuffixType.has_i_suffix:
+            return "%si" % unsuffixed_rid
+        else:
+            return unsuffixed_rid
 
 
 def create_event_feature_class(event_table,
@@ -120,11 +128,15 @@ def create_event_feature_class(event_table,
     arcpy.management.CreateFeatureclass(workspace, fc_name, out_geo_type,
                                         spatial_reference=routes_desc.spatialReference)
     event_oid_field_name = "EventOid"
+    error_field_name = "Error"
     arcpy.management.AddField(out_fc, event_oid_field_name, "LONG", field_alias="Event OID",
                               field_is_nullable=False, field_is_required=True)
+    arcpy.management.AddField(out_fc, error_field_name, "TEXT", field_is_nullable=True,
+                              field_alias="Locating Error")
 
     with arcpy.da.SearchCursor(event_table, fields) as table_cursor:
-        with arcpy.da.InsertCursor(out_fc, (event_oid_field_name, "SHAPE@")) as insert_cursor:
+        with arcpy.da.InsertCursor(out_fc, (event_oid_field_name, "SHAPE@",
+                                            error_field_name)) as insert_cursor:
             for row in table_cursor:
                 event_oid = row[0]
                 event_route_id = row[1]
@@ -138,13 +150,14 @@ def create_event_feature_class(event_table,
                     std_route_id = standardize_route_id(
                         event_route_id, route_id_suffix_type)
                 except ValueError as ex:
-                    arcpy.AddWarning("Invalid route ID at OID %d: %s" %
-                                     (event_oid, event_route_id))
+                    msg = "Invalid route ID at OID %d: %s" % (event_oid, event_route_id)
+                    insert_cursor.insertRow((event_oid, None, msg))
                     continue
 
                 where = "%s = '%s'" % (
                     route_layer_route_id_field, std_route_id)
                 out_geom = None
+                error = None
                 with arcpy.da.SearchCursor(route_layer, "SHAPE@", where) as route_cursor:
                     # Initialize output route event geometry.
                     for (geom,) in route_cursor:
@@ -156,22 +169,23 @@ def create_event_feature_class(event_table,
                                 out_geom = geom.segmentAlongLine(
                                     begin_m, end_m)
                         except Exception as ex:
-                            arcpy.AddWarning("Error finding event on route: %s @ %s." % (
-                                std_route_id, (begin_m, end_m)))
+                            error = ex
+                            arcpy.AddWarning("Error finding event on route: %s @ %s.\n%s" % (
+                                std_route_id, (begin_m, end_m), ex))
                         # If out geometry has been found, no need to try with other
                         # route features. (There should be only one route feature,
                         # anyway.)
                         if out_geom:
+                            error = None
                             break
-                # Go to next event if this one could not be placed
-                if out_geom is None:
-                    arcpy.AddWarning("Could not locate %s on %s (%s)." % (
-                        (begin_m, end_m), std_route_id, event_route_id))
-                    continue
-                try:
-                    insert_cursor.insertRow((event_oid, out_geom))
-                except Exception as ex:
-                    arcpy.AddWarning("Error inserting %s into output feature class." %
-                                     (event_oid, out_geom))
+                if error:
+                    insert_cursor.insertRow((event_oid, None, str(error)))
+                elif out_geom is None:
+                    msg = "Could not locate %s on %s (%s)." % (
+                        (begin_m, end_m), std_route_id, event_route_id)
+                    insert_cursor.insertRow((event_oid, None, msg))
+                    arcpy.AddWarning(msg)
+                else:
+                    insert_cursor.insertRow((event_oid, out_geom, None))
 
     return out_fc

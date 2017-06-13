@@ -6,25 +6,34 @@ from __future__ import (unicode_literals, print_function, division,
 import unittest
 import os
 import re
-from wsdotroute import create_event_feature_class
 import arcpy
 
 
 class TestWsdotRoute(unittest.TestCase):
     """Unit tests
     """
-
     def test_create_event_feature_class(self):
+        toolbox_path = os.path.join(
+            os.path.split(__file__)[0],
+            "wsdotroute/esri/toolboxes/wsdotroute.pyt"
+        )
+        arcpy.ImportToolbox(toolbox_path)
         # Create input event table
-        workspace = "in_memory" #arcpy.env.scratchGDB
+        # workspace = "in_memory"  # arcpy.env.scratchGDB
+        workspace = arcpy.env.scratchGDB
         table_path = arcpy.CreateScratchName("Input", None, "Table", workspace)
         event_route_field = "RouteID"
         event_m_1_field = "BeginArm"
         event_m_2_field = "EndArm"
         route_layer_route_id_field = "RouteIdentifier"
-        route_fc = os.path.join(os.path.split(__file__)[0], 'Sample.gdb', 'StateRouteLRS')
+        route_fc = os.path.join(os.path.split(
+            __file__)[0], 'Sample.gdb', 'StateRouteLRS')
         out_fc = arcpy.CreateScratchName(
             "output", data_type="Feature Class", workspace=workspace)
+        data_rows = (
+            ("005", 0, 5),
+            ("I-5", 20, 100)
+        )
         try:
             arcpy.management.CreateTable(*os.path.split(table_path))
             arcpy.management.AddField(table_path, event_route_field, field_type="TEXT",
@@ -36,25 +45,33 @@ class TestWsdotRoute(unittest.TestCase):
 
             with arcpy.da.InsertCursor(table_path, (event_route_field, event_m_1_field,
                                                     event_m_2_field)) as cursor:
-                cursor.insertRow(("005", 0, 5))
+                for row in data_rows:
+                    cursor.insertRow(row)
 
-            out_fc = create_event_feature_class(
+            arcpy.wsdotroute.LocateRouteEvents(
                 table_path, route_fc, event_route_field, route_layer_route_id_field,
                 event_m_1_field, event_m_2_field, out_fc=out_fc)
+
+            # out_fc = create_event_feature_class(
+            #     table_path, route_fc, event_route_field, route_layer_route_id_field,
+            #     event_m_1_field, event_m_2_field, out_fc=out_fc)
 
             # Test for expected output number of rows.
             get_count_output = arcpy.management.GetCount(out_fc)
             out_row_count = int(get_count_output[0])
-            self.assertEqual(out_row_count, 1, "Output feature class should have 1 row.")
+            self.assertEqual(out_row_count, len(data_rows),
+                             "Output feature class should have %d row(s)." % len(data_rows))
             del get_count_output, out_row_count
 
-            with arcpy.da.SearchCursor(out_fc, ("EventOid", "SHAPE@")) as cursor:
-                for oid, shape in cursor:
+            with arcpy.da.SearchCursor(out_fc, ("EventOid", "SHAPE@", "Error")) as cursor:
+                for oid, shape, error in cursor:
                     self.assertTrue(isinstance(oid, int),
                                     "OID should be an int")
-                    self.assertTrue(isinstance(shape, arcpy.Polyline),
+                    self.assertTrue(isinstance(shape, arcpy.Polyline) or isinstance(error, str),
                                     "Geometry should be a Polyline")
-                    self.assertGreater(shape.length, 0, "Length should be greater than 0")
+                    if shape:
+                        self.assertGreater(
+                            shape.length, 0, "Length should be greater than 0")
 
         finally:
             if arcpy.Exists(table_path):

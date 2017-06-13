@@ -6,13 +6,7 @@ import sys
 import os
 import arcpy
 
-# Update path to insure toolbox can find wsdotroute module.
-_NEW_PATH = os.path.join(os.path.split(__file__)[0], "../../..")
-_NEW_PATH = os.path.abspath(_NEW_PATH)
-sys.path.append(os.path.abspath(_NEW_PATH))
-del _NEW_PATH
-
-from wsdotroute import create_event_feature_class
+from wsdotroute import create_event_feature_class, RouteIdSuffixType
 
 class Toolbox(object):
     def __init__(self):
