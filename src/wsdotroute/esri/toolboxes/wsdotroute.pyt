@@ -68,7 +68,7 @@ class LocateRouteEvents(object):
         '''Define the tool (tool name is the name of the class).'''
         self.label = 'LocateRouteEvents'
         self.description = 'Locates route events along Washington state routes'
-        self.canRunInBackground = False
+        self.canRunInBackground = True
 
     def getParameterInfo(self):
         '''Define parameter definitions'''
@@ -98,14 +98,14 @@ class LocateRouteEvents(object):
         begin_measure_field_param = arcpy.Parameter(
             "begin_m_field", "Begin Measure Field", "Input", "Field", "Required"
         )
-        begin_measure_field_param.filter.list = ['Double']
+        begin_measure_field_param.filter.list = ['Double', 'Single']
         begin_measure_field_param.parameterDependencies = [
             event_table_param.name]
 
         end_measure_field_param = arcpy.Parameter(
             "end_m_field", "End Measure Field", "Input", "Field", "Optional"
         )
-        end_measure_field_param.filter.list = ['Double']
+        end_measure_field_param.filter.list = ['Double', 'Single']
         end_measure_field_param.parameterDependencies = [
             event_table_param.name]
 
@@ -203,31 +203,33 @@ class LocateRouteEvents(object):
             else:
                 out_fc_param.schema.geometryType = "Point"
 
+        # Warn if user selects field containing "SRMP" for measure field.
+        begin_m_p = parameters[_Ords.begin_measure_field]
+        end_m_p = parameters[_Ords.end_measure_field]
+        if begin_m_p.altered or end_m_p.altered:
+            # Add error message if both parameters are set to the same field.
+            if (begin_m_p.valueAsText and end_m_p.valueAsText and
+                    begin_m_p.valueAsText == end_m_p.valueAsText):
+                end_m_p.setErrorMessage(
+                    "'%s' and '%s' cannot both be set to the same field" % (
+                        begin_m_p.name,
+                        end_m_p.name
+                    ))
+            else:
+                bad_re = re.compile(r"S(tate)?R(oute)?M(ile)?P(ost)?", re.IGNORECASE)
+                for p in filter(lambda p: p.value is not None, (begin_m_p, end_m_p)):
+                    p.clearMessage()
+                    if bad_re.search(p.valueAsText):
+                        p.setWarningMessage(
+                            "State Route Milepost (SRMP) values are not measures " +
+                            "and will not return accurate route event geometry when used.")
+
         return
 
     def updateMessages(self, parameters):
         '''Modify the messages created by internal validation for each tool
         parameter.  This method is called after internal validation.'''
-        # # TODO: Fix code to warn if user selects field containing "SRMP" for measure field.
-        # begin_m_p = parameters[_Ords.begin_measure_field]
-        # end_m_p = parameters[_Ords.end_measure_field]
-        # if begin_m_p.altered or end_m_p.altered:
-        #     # Add error message if both parameters are set to the same field.
-        #     if (begin_m_p.valueAsText and end_m_p.valueAsText and
-        #             begin_m_p.valueAsText == end_m_p.valueAsText):
-        #         end_m_p.setErrorMessage(
-        #             "'%s' and '%s' cannot both be set to the same field" % (
-        #                 begin_m_p.name,
-        #                 end_m_p.name
-        #             ))
-        #     else:
-        #         bad_re = re.compile(r"S(tate)?R(oute)?M(ile)?P(ost)?", re.IGNORECASE)
-        #         for p in filter(lambda p: p.value is not None, (begin_m_p, end_m_p)):
-        #             p.clearMessage()
-        #             if bad_re.search(p.valueAsText):
-        #                 p.setWarningMessage(
-        #                     "State Route Milepost (SRMP) values are not measures " +
-        #                     "and will not return accurate route event geometry when used.")
+
         return
 
     def execute(self, parameters, messages):
