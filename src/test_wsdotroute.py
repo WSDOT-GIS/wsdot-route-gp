@@ -5,7 +5,6 @@ from __future__ import (unicode_literals, print_function, division,
 
 import unittest
 import os
-import re
 import arcpy
 
 
@@ -13,11 +12,19 @@ class TestWsdotRoute(unittest.TestCase):
     """Unit tests
     """
     def test_create_event_feature_class(self):
+        """Tests the ability to create an event feature class.
+        """
         toolbox_path = os.path.join(
-            os.path.split(__file__)[0],
+            os.path.split(__file__)[0], # script's directory
             "wsdot", "route", "esri", "toolboxes", "wsdotroute.pyt"
         )
-        arcpy.ImportToolbox(toolbox_path)
+        if not os.path.exists(toolbox_path):
+            raise FileNotFoundError(toolbox_path)
+        try:
+            arcpy.ImportToolbox(toolbox_path)
+        except OSError as ex:
+            msg = 'Error loading toolbox "%s". File exists but could not be loaded.\n%s' % (toolbox_path, ex)
+            self.fail(msg)
         # Create input event table
         # workspace = "in_memory"  # arcpy.env.scratchGDB
         workspace = arcpy.env.scratchGDB
