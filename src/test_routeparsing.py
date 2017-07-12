@@ -1,10 +1,10 @@
-"""unit test for wsdotroute module
+"""unit test for wsdot.route module
 """
 from __future__ import (unicode_literals, print_function, division,
                         absolute_import)
 
 import unittest
-from wsdotroute import standardize_route_id, RouteIdSuffixType
+from wsdot.route import standardize_route_id, RouteIdSuffixType
 
 
 class TestRouteIdParsing(unittest.TestCase):

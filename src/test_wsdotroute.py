@@ -1,4 +1,4 @@
-"""unit test for wsdotroute module
+"""unit test for wsdot.route module
 """
 from __future__ import (unicode_literals, print_function, division,
                         absolute_import)
@@ -15,7 +15,7 @@ class TestWsdotRoute(unittest.TestCase):
     def test_create_event_feature_class(self):
         toolbox_path = os.path.join(
             os.path.split(__file__)[0],
-            "wsdotroute/esri/toolboxes/wsdotroute.pyt"
+            "wsdot", "route", "esri", "toolboxes", "wsdotroute.pyt"
         )
         arcpy.ImportToolbox(toolbox_path)
         # Create input event table
