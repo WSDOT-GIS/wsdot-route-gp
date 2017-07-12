@@ -27,7 +27,7 @@ class TestWsdotRoute(unittest.TestCase):
         event_m_2_field = "EndArm"
         route_layer_route_id_field = "RouteIdentifier"
         route_fc = os.path.join(os.path.split(
-            __file__)[0], 'Sample.gdb', 'StateRouteLRS')
+            __file__)[0], '..', 'Samples', 'Sample.gdb', 'StateRouteLRS')
         out_fc = arcpy.CreateScratchName(
             "output", data_type="Feature Class", workspace=workspace)
         data_rows = (
