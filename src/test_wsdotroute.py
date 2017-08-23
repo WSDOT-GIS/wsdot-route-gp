@@ -14,17 +14,19 @@ class TestWsdotRoute(unittest.TestCase):
     def test_create_event_feature_class(self):
         """Tests the ability to create an event feature class.
         """
-        toolbox_path = os.path.join(
-            os.path.split(__file__)[0], # script's directory
-            "wsdot", "route", "esri", "toolboxes", "wsdotroute.pyt"
-        )
-        if not os.path.exists(toolbox_path):
-            raise FileNotFoundError(toolbox_path)
-        try:
-            arcpy.ImportToolbox(toolbox_path)
-        except OSError as ex:
-            msg = 'Error loading toolbox "%s". File exists but could not be loaded.\n%s' % (toolbox_path, ex)
-            self.fail(msg)
+        toolbox_path = None
+        if 'wsdotroute' not in dir(arcpy):
+            toolbox_path = os.path.join(
+                os.path.split(__file__)[0], # script's directory
+                "wsdot", "route", "esri", "toolboxes", "wsdotroute.pyt"
+            )
+            if not os.path.exists(toolbox_path):
+                raise FileNotFoundError(toolbox_path)
+            try:
+                arcpy.ImportToolbox(toolbox_path)
+            except OSError as ex:
+                msg = 'Error loading toolbox "%s". File exists but could not be loaded.\n%s' % (toolbox_path, ex)
+                self.fail(msg)
         # Create input event table
         # workspace = "in_memory"  # arcpy.env.scratchGDB
         workspace = arcpy.env.scratchGDB
@@ -34,7 +36,7 @@ class TestWsdotRoute(unittest.TestCase):
         event_m_2_field = "EndArm"
         route_layer_route_id_field = "RouteIdentifier"
         route_fc = os.path.join(os.path.split(
-            __file__)[0], 'Sample.gdb', 'StateRouteLRS')
+            __file__)[0], '..', 'Samples', 'Sample.gdb', 'StateRouteLRS')
         out_fc = arcpy.CreateScratchName(
             "output", data_type="Feature Class", workspace=workspace)
         data_rows = (
@@ -85,6 +87,8 @@ class TestWsdotRoute(unittest.TestCase):
                 arcpy.management.Delete(table_path)
             if out_fc and arcpy.Exists(out_fc):
                 arcpy.management.Delete(out_fc)
+            if toolbox_path:
+                arcpy.RemoveToolbox(toolbox_path)
 
 
 if __name__ == '__main__':

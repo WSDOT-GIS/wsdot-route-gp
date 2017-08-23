@@ -22,6 +22,13 @@ If you want to run the `wsdotroute.pyt` toolbox from ArcCatalog without installi
     ```
 3. Open the toolbox file
 
+Run Unit Tests
+--------------
+
+```console
+python -m unittest discover -f src
+```
+
 Notes
 -----
 Functions are documented using the [Google Python Style Guide] format.
