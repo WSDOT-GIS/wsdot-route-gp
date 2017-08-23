@@ -4,8 +4,8 @@ from __future__ import (unicode_literals, print_function, division,
                         absolute_import)
 
 import re
-import arcpy
 from os.path import split as split_path
+import arcpy
 
 
 class RouteIdSuffixType(object):
@@ -55,11 +55,9 @@ def standardize_route_id(route_id, route_id_suffix_type=RouteIdSuffixType.has_bo
         direction = match.group("dir")
         if route_id_suffix_type == RouteIdSuffixType.has_no_suffix:
             return unsuffixed_rid
-        else:
-            if direction:
-                return "%s%s" % (unsuffixed_rid, direction)
-            else:
-                return "%si" % unsuffixed_rid
+        if direction:
+            return "%s%s" % (unsuffixed_rid, direction)
+        return "%si" % unsuffixed_rid
     else:
         match = route_label_format_re.match(route_id)
         if not match:
@@ -68,8 +66,7 @@ def standardize_route_id(route_id, route_id_suffix_type=RouteIdSuffixType.has_bo
         unsuffixed_rid = match.group(1).rjust(3, "0")
         if route_id_suffix_type & RouteIdSuffixType.has_i_suffix == RouteIdSuffixType.has_i_suffix:
             return "%si" % unsuffixed_rid
-        else:
-            return unsuffixed_rid
+        return unsuffixed_rid
 
 
 def create_event_feature_class(event_table,
