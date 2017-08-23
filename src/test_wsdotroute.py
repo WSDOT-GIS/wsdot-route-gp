@@ -1,11 +1,10 @@
-"""unit test for wsdotroute module
+"""unit test for wsdot.route module
 """
 from __future__ import (unicode_literals, print_function, division,
                         absolute_import)
 
 import unittest
 import os
-import re
 import arcpy
 
 
@@ -13,11 +12,21 @@ class TestWsdotRoute(unittest.TestCase):
     """Unit tests
     """
     def test_create_event_feature_class(self):
-        toolbox_path = os.path.join(
-            os.path.split(__file__)[0],
-            "wsdotroute/esri/toolboxes/wsdotroute.pyt"
-        )
-        arcpy.ImportToolbox(toolbox_path)
+        """Tests the ability to create an event feature class.
+        """
+        toolbox_path = None
+        if 'wsdotroute' not in dir(arcpy):
+            toolbox_path = os.path.join(
+                os.path.split(__file__)[0], # script's directory
+                "wsdot", "route", "esri", "toolboxes", "wsdotroute.pyt"
+            )
+            if not os.path.exists(toolbox_path):
+                raise FileNotFoundError(toolbox_path)
+            try:
+                arcpy.ImportToolbox(toolbox_path)
+            except OSError as ex:
+                msg = 'Error loading toolbox "%s". File exists but could not be loaded.\n%s' % (toolbox_path, ex)
+                self.fail(msg)
         # Create input event table
         # workspace = "in_memory"  # arcpy.env.scratchGDB
         workspace = arcpy.env.scratchGDB
@@ -78,6 +87,8 @@ class TestWsdotRoute(unittest.TestCase):
                 arcpy.management.Delete(table_path)
             if out_fc and arcpy.Exists(out_fc):
                 arcpy.management.Delete(out_fc)
+            if toolbox_path:
+                arcpy.RemoveToolbox(toolbox_path)
 
 
 if __name__ == '__main__':

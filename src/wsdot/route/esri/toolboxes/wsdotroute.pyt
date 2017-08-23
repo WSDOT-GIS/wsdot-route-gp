@@ -7,7 +7,7 @@ import os
 import re
 import arcpy
 
-from wsdotroute import create_event_feature_class, RouteIdSuffixType
+from wsdot.route import create_event_feature_class, RouteIdSuffixType
 
 
 def _create_field(**kwargs):
