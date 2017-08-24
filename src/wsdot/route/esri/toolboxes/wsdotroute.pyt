@@ -7,8 +7,16 @@ import os
 import re
 import arcpy
 
-from wsdot.route import create_event_feature_class, RouteIdSuffixType
+from wsdot.route import (add_standardized_route_id_field,
+                         create_event_feature_class,
+                         RouteIdSuffixType)
 
+_suffix_dict = {
+    "NONE": RouteIdSuffixType.has_no_suffix,
+    "I_ONLY": RouteIdSuffixType.has_i_suffix,
+    "D_ONLY": RouteIdSuffixType.has_d_suffix,
+    "ALL": RouteIdSuffixType.has_i_suffix | RouteIdSuffixType.has_d_suffix
+}
 
 def _create_field(**kwargs):
     field = arcpy.Field()
@@ -40,7 +48,7 @@ def _get_first_field(fields, regex, *typeOrTypes):
     return None
 
 
-class _Ords(object):
+class _LocateRouteEventsOrds(object):
     """Used to access indexes for parameters
     """
     event_table = 0
@@ -61,6 +69,88 @@ class Toolbox(object):
         self.alias = 'wsdotroute'
         # List of tool classes associated with this toolbox
         self.tools = [LocateRouteEvents]
+
+
+class AddDirectionedRouteIdField(object):
+    def __init__(self):
+        """
+        """
+        self.label = 'Add directioned route ID field'
+        self.descripiton = 'Adds a new field that combines WSDOT route ID and direction.'
+        self.canRunInBackground = True
+
+    def getParameterInfo(self):
+        """
+        """
+        table_param = arcpy.Parameter(
+            "in_table", "In Table", "Input", "DETable", "Required")
+        route_id_field_param = arcpy.Parameter("route_id_field", "Route ID Field", "Input",
+                                               "Field", "Required")
+        route_id_field_param.parameterDependencies = [table_param.name]
+
+        direction_field_param = arcpy.Parameter("direction_field", "Direction Field", "Input",
+                                                "Field", "Required")
+        direction_field_param.parameterDependencies = [table_param.name]
+
+        out_route_id_field_name_param = arcpy.Parameter(
+            "out_route_id_field_name", "Output route ID field name",
+            "Input", "Text", "Required"
+        )
+        out_error_field_name_param = arcpy.Parameter(
+            "out_error_field_name", "Output Error Field Name", "Input", "Text", "Required")
+
+        out_route_id_suffix_type_param = arcpy.Parameter("route_id_suffix_type",
+                                                         "Route ID Suffix Type", "Input",
+                                                         "Text", "Required")
+        out_route_id_suffix_type_param.filter.type = "ValueList"
+        out_route_id_suffix_type_param.filter.list = [
+            "D_ONLY", "I_ONLY", "ALL"]
+        out_route_id_suffix_type_param.value = "ALL"
+        out_table_param = arcpy.Parameter("out_table", "Output Table", "Output",
+                                          "DETable", "Derived")
+        out_table_param.parameterDependencies = [table_param.name]
+        out_table_param.schema.clone = True
+
+        return [
+            table_param,
+            route_id_field_param,
+            direction_field_param,
+            out_route_id_field_name_param,
+            out_error_field_name_param,
+            out_route_id_suffix_type_param,
+            out_table_param
+        ]
+
+    def isLicensed(self):
+        '''Set whether tool is licensed to execute.'''
+        return True
+
+    def updateParameters(self, parameters):
+        '''Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed.'''
+        # TODO: Update output schema when new field name parameters have values.
+        # TODO: Make sure new field names are valid and don't already exist in table.
+        return
+
+    def updateMessages(self, parameters):
+        '''Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation.'''
+        return
+
+    def execute(self, parameters, messages):
+        '''The source code of the tool.'''
+        table = parameters[0].valueAsText
+        route_id_field = parameters[1].valueAsText
+        direction_field = parameters[2].valueAsText
+        out_route_id_field = parameters[3].valueAsText
+        out_error_field = parameters[4].valueAsText
+        out_route_id_suffix_type = _suffix_dict[parameters[5].valueAsText]
+
+        add_standardized_route_id_field(
+            table, route_id_field, direction_field, out_route_id_field, out_error_field, out_route_id_suffix_type)
+
+        return
 
 
 class LocateRouteEvents(object):
@@ -156,7 +246,7 @@ class LocateRouteEvents(object):
         '''Modify the values and properties of parameters before internal
         validation is performed.  This method is called whenever a parameter
         has been changed.'''
-        event_table_param = parameters[_Ords.event_table]
+        event_table_param = parameters[_LocateRouteEventsOrds.event_table]
         re_options = re.IGNORECASE | re.VERBOSE
         route_id_re = re.compile(r"R(?:oute)?Id(?:entifier)?")
         begin_m_re = re.compile(r"""((Begin)|(Start))?(
@@ -171,41 +261,41 @@ class LocateRouteEvents(object):
         if event_table_param.altered and event_table_param.valueAsText:
             event_table_desc = arcpy.Describe(event_table_param.valueAsText)
 
-            route_id_field = parameters[_Ords.event_table_route_id_field]
+            route_id_field = parameters[_LocateRouteEventsOrds.event_table_route_id_field]
             if not route_id_field.value:
                 route_id_field.value = _get_first_field(
                     event_table_desc.fields, route_id_re, "String", "TEXT")
 
-            m_1_field_param = parameters[_Ords.begin_measure_field]
+            m_1_field_param = parameters[_LocateRouteEventsOrds.begin_measure_field]
             if not m_1_field_param.value:
                 m_1_field_param.value = _get_first_field(
                     event_table_desc.fields, begin_m_re, "Double", "Single")
 
-            m_2_field_param = parameters[_Ords.end_measure_field]
+            m_2_field_param = parameters[_LocateRouteEventsOrds.end_measure_field]
             if not m_2_field_param.value:
                 m_2_field_param.value = _get_first_field(
                     event_table_desc.fields, end_m_re, "Double", "Single")
 
-        route_layer_param = parameters[_Ords.route_layer]
+        route_layer_param = parameters[_LocateRouteEventsOrds.route_layer]
         if route_layer_param.altered and route_layer_param.value:
-            route_layer_rid_field_param = parameters[_Ords.route_layer_route_id_field]
+            route_layer_rid_field_param = parameters[_LocateRouteEventsOrds.route_layer_route_id_field]
             if not route_layer_rid_field_param.value:
                 route_layer_desc = arcpy.Describe(
                     route_layer_param.valueAsText)
                 route_layer_rid_field_param.value = _get_first_field(
                     route_layer_desc.fields, route_id_re, "String", "TEXT")
 
-        end_measure_field_param = parameters[_Ords.end_measure_field]
+        end_measure_field_param = parameters[_LocateRouteEventsOrds.end_measure_field]
         if end_measure_field_param.altered:
-            out_fc_param = parameters[_Ords.out_fc]
+            out_fc_param = parameters[_LocateRouteEventsOrds.out_fc]
             if end_measure_field_param.value:
                 out_fc_param.schema.geometryType = "Polyline"
             else:
                 out_fc_param.schema.geometryType = "Point"
 
         # Warn if user selects field containing "SRMP" for measure field.
-        begin_m_p = parameters[_Ords.begin_measure_field]
-        end_m_p = parameters[_Ords.end_measure_field]
+        begin_m_p = parameters[_LocateRouteEventsOrds.begin_measure_field]
+        end_m_p = parameters[_LocateRouteEventsOrds.end_measure_field]
         if begin_m_p.altered or end_m_p.altered:
             # Add error message if both parameters are set to the same field.
             if (begin_m_p.valueAsText and end_m_p.valueAsText and
@@ -216,7 +306,8 @@ class LocateRouteEvents(object):
                         end_m_p.name
                     ))
             else:
-                bad_re = re.compile(r"S(tate)?R(oute)?M(ile)?P(ost)?", re.IGNORECASE)
+                bad_re = re.compile(
+                    r"S(tate)?R(oute)?M(ile)?P(ost)?", re.IGNORECASE)
                 for p in filter(lambda p: p.value is not None, (begin_m_p, end_m_p)):
                     p.clearMessage()
                     if bad_re.search(p.valueAsText):
@@ -243,13 +334,7 @@ class LocateRouteEvents(object):
         if end_measure_field == "#":
             end_measure_field = None
 
-        suffix_dict = {
-            "NONE": RouteIdSuffixType.has_no_suffix,
-            "I_ONLY": RouteIdSuffixType.has_i_suffix,
-            "D_ONLY": RouteIdSuffixType.has_d_suffix,
-            "ALL": RouteIdSuffixType.has_i_suffix | RouteIdSuffixType.has_d_suffix
-        }
-        route_id_suffix = suffix_dict[parameters[6].valueAsText]
+        route_id_suffix = _suffix_dict[parameters[6].valueAsText]
         out_fc = parameters[7].valueAsText
         create_event_feature_class(event_table, route_layer, event_table_route_id_field,
                                    route_layer_route_id_field, begin_measure_field,
