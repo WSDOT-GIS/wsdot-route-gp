@@ -68,6 +68,46 @@ def standardize_route_id(route_id, route_id_suffix_type=RouteIdSuffixType.has_bo
             return "%si" % unsuffixed_rid
         return unsuffixed_rid
 
+def add_standardized_route_id_field(in_table, route_id_field, direction_field, out_field_name, out_error_field_name, route_id_suffix_type):
+    """Adds route ID + direction field to event table that has both unsuffixed route ID and direction fields.
+    """
+    # Make sure an output route ID suffix type other than "unsuffixed" has been specified.
+    if route_id_suffix_type == RouteIdSuffixType.has_no_suffix:
+        raise ValueError("Invalid route ID suffix type: %s" % route_id_suffix_type)
+
+    # Determine the length of the output route ID field based on route suffix type
+    out_field_length = 11
+    if route_id_suffix_type == RouteIdSuffixType.has_i_suffix or route_id_suffix_type == RouteIdSuffixType.has_d_suffix:
+        out_field_length += 1
+    elif route_id_suffix_type == RouteIdSuffixType.has_both_i_and_d:
+        out_field_length += 2
+
+    # Add new fields to the output table.
+    arcpy.management.AddFields(in_table, [
+        [out_field_name, "TEXT", None, out_field_length, None],
+        [out_error_field_name, "TEXT", None, None] # Use default length (255)
+    ])
+
+    decrease_re = re.compile(r"^d", re.IGNORECASE)
+
+    with arcpy.da.UpdateCursor(in_table, (route_id_field, direction_field, out_field_name, out_error_field_name)) as cursor:
+        for row in cursor:
+            rid = row[0]
+            direction = row[1]
+            # Get unsuffixed, standardized route ID.
+            try:
+                rid = standardize_route_id(rid, RouteIdSuffixType.has_no_suffix)
+            except ValueError as error:
+                direction[3] = "%s" % error
+            else:
+                match = decrease_re.match(direction)
+                if match and route_id_suffix_type & RouteIdSuffixType.has_d_suffix == RouteIdSuffixType.has_d_suffix:
+                    rid = "%s%s" & (rid, "d")
+                elif route_id_suffix_type & RouteIdSuffixType.has_i_suffix:
+                    rid = "%s%s" & (rid, "i")
+                row[2] = rid
+            cursor.updateRow(row)
+
 
 def create_event_feature_class(event_table,
                                route_layer,
@@ -147,7 +187,8 @@ def create_event_feature_class(event_table,
                     std_route_id = standardize_route_id(
                         event_route_id, route_id_suffix_type)
                 except ValueError as ex:
-                    msg = "Invalid route ID at OID %d: %s" % (event_oid, event_route_id)
+                    msg = "Invalid route ID at OID %d: %s" % (
+                        event_oid, event_route_id)
                     insert_cursor.insertRow((event_oid, None, msg))
                     continue
 
@@ -186,3 +227,17 @@ def create_event_feature_class(event_table,
                     insert_cursor.insertRow((event_oid, out_geom, None))
 
     return out_fc
+
+
+def find_route_location(
+        in_features,
+        route_layer,
+        in_features_route_id_field,
+        route_layer_route_id_field,
+        out_fc,
+        route_id_suffix_type=RouteIdSuffixType.has_both_i_and_d):
+    """Given input features, finds location nearest route.
+    """
+    pass
+    # with arcpy.da.SearchCursor(in_features,)
+    #     pass
