@@ -14,6 +14,10 @@
     General notes
 #>
 
+function Get-Pythons() {
+    return (Get-ChildItem -Path "$env:HOMEDRIVE\\Python*\**\python.exe") + (Get-ChildItem -Path "$env:ProgramFiles\ArcGIS\Pro\bin\Python\envs\**\python.exe")
+}
+
 
 <#
 .SYNOPSIS
@@ -71,14 +75,28 @@ function Get-PythonPackages {
 function Install-PythonPackage (
     [Parameter(Mandatory)]
     [string]
-    $packageName) {
+    $packageName,
+    [switch]
+    $User,
+    [switch]
+    $Editable
+    ) {
     $pips = Get-PythonTool "pip.exe"
     if (-not $pips) {
         Write-Error "Could not find any instances of pip.exe"
     } else {
         # $procs = @()
+        $procParams = "install"
+        if ($Editable) {
+            $procParams += " -e"
+        }
+        $procParams += " $packageName"
+        if ($User) {
+            $procParams += " --user"
+        }
         foreach ($pip in $pips) {
-            Start-Process $pip "install $packageName --user" -NoNewWindow -Wait
+            Write-Host "Installing to $pip..." -ForegroundColor Yellow
+            Start-Process $pip $procParams -NoNewWindow -Wait
             # $procs += $p
         }
         # Wait-Process $procs
@@ -96,7 +114,7 @@ function Uninstall-PythonPackage (
     } else {
         # $procs = @()
         foreach ($pip in $pips) {
-            Start-Process $pip "uninstall $packageName --user" -NoNewWindow -Wait
+            Start-Process $pip "uninstall $packageName" -NoNewWindow -Wait
             # $procs += $p
         }
         # Wait-Process $procs

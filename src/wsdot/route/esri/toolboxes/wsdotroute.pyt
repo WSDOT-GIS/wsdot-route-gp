@@ -68,7 +68,7 @@ class Toolbox(object):
         self.label = 'WSDOT Route'
         self.alias = 'wsdotroute'
         # List of tool classes associated with this toolbox
-        self.tools = [LocateRouteEvents]
+        self.tools = [LocateRouteEvents, AddDirectionedRouteIdField]
 
 
 class AddDirectionedRouteIdField(object):
@@ -94,14 +94,14 @@ class AddDirectionedRouteIdField(object):
 
         out_route_id_field_name_param = arcpy.Parameter(
             "out_route_id_field_name", "Output route ID field name",
-            "Input", "Text", "Required"
+            "Input", "String", "Required"
         )
         out_error_field_name_param = arcpy.Parameter(
-            "out_error_field_name", "Output Error Field Name", "Input", "Text", "Required")
+            "out_error_field_name", "Output Error Field Name", "Input", "String", "Required")
 
         out_route_id_suffix_type_param = arcpy.Parameter("route_id_suffix_type",
                                                          "Route ID Suffix Type", "Input",
-                                                         "Text", "Required")
+                                                         "String", "Required")
         out_route_id_suffix_type_param.filter.type = "ValueList"
         out_route_id_suffix_type_param.filter.list = [
             "D_ONLY", "I_ONLY", "ALL"]

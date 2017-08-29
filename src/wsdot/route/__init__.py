@@ -40,7 +40,20 @@ def standardize_route_id(route_id, route_id_suffix_type=RouteIdSuffixType.has_bo
                     # 3-digit mainline route identifier
                     (?P<sr>\d{3})
                     (?: # rrt and rrq may or may not be present
-                        (?P<rrt>[A-Z0-9]{2})
+                        (?P<rrt>
+                            (AR)|
+                            (CO)|
+                            (F[ST])|
+                            (PR)|
+                            (RL)|
+                            (SP)|
+                            (TB)|
+                            (TR)|
+                            (LX)|
+                            ([CFH][DI])|
+                            ([PQRS][1-9])|
+                            (UC)
+                        )
                         # rrt can exist without rrq.
                         (?P<rrq>[A-Z0-9]{0,6})
                     )?
@@ -83,10 +96,15 @@ def add_standardized_route_id_field(in_table, route_id_field, direction_field, o
         out_field_length += 2
 
     # Add new fields to the output table.
-    arcpy.management.AddFields(in_table, [
-        [out_field_name, "TEXT", None, out_field_length, None],
-        [out_error_field_name, "TEXT", None, None] # Use default length (255)
-    ])
+    if "AddFields" in dir(arcpy.management):
+        arcpy.management.AddFields(in_table, [
+            [out_field_name, "TEXT", None, out_field_length, None],
+            [out_error_field_name, "TEXT", None, None] # Use default length (255)
+        ])
+    else:
+        # ArcGIS Desktop 10.5.1 doesn't have AddFields, so use multiple AddField calls.
+        arcpy.management.AddField(in_table, out_field_name, "TEXT", field_length=out_field_length)
+        arcpy.management.AddField(in_table, out_error_field_name, "TEXT")
 
     decrease_re = re.compile(r"^d", re.IGNORECASE)
 
@@ -98,13 +116,13 @@ def add_standardized_route_id_field(in_table, route_id_field, direction_field, o
             try:
                 rid = standardize_route_id(rid, RouteIdSuffixType.has_no_suffix)
             except ValueError as error:
-                direction[3] = "%s" % error
+                row[3] = "%s" % error
             else:
                 match = decrease_re.match(direction)
                 if match and route_id_suffix_type & RouteIdSuffixType.has_d_suffix == RouteIdSuffixType.has_d_suffix:
-                    rid = "%s%s" & (rid, "d")
+                    rid = "%s%s" % (rid, "d")
                 elif route_id_suffix_type & RouteIdSuffixType.has_i_suffix:
-                    rid = "%s%s" & (rid, "i")
+                    rid = "%s%s" % (rid, "i")
                 row[2] = rid
             cursor.updateRow(row)
 
