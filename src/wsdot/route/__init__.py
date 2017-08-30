@@ -4,7 +4,7 @@ from __future__ import (unicode_literals, print_function, division,
                         absolute_import)
 
 import re
-from os.path import split as split_path
+from os.path import split as split_path, join as join_path
 import arcpy
 
 
@@ -81,12 +81,14 @@ def standardize_route_id(route_id, route_id_suffix_type=RouteIdSuffixType.has_bo
             return "%si" % unsuffixed_rid
         return unsuffixed_rid
 
+
 def add_standardized_route_id_field(in_table, route_id_field, direction_field, out_field_name, out_error_field_name, route_id_suffix_type):
     """Adds route ID + direction field to event table that has both unsuffixed route ID and direction fields.
     """
     # Make sure an output route ID suffix type other than "unsuffixed" has been specified.
     if route_id_suffix_type == RouteIdSuffixType.has_no_suffix:
-        raise ValueError("Invalid route ID suffix type: %s" % route_id_suffix_type)
+        raise ValueError("Invalid route ID suffix type: %s" %
+                         route_id_suffix_type)
 
     # Determine the length of the output route ID field based on route suffix type
     out_field_length = 11
@@ -99,11 +101,13 @@ def add_standardized_route_id_field(in_table, route_id_field, direction_field, o
     if "AddFields" in dir(arcpy.management):
         arcpy.management.AddFields(in_table, [
             [out_field_name, "TEXT", None, out_field_length, None],
-            [out_error_field_name, "TEXT", None, None] # Use default length (255)
+            # Use default length (255)
+            [out_error_field_name, "TEXT", None, None]
         ])
     else:
         # ArcGIS Desktop 10.5.1 doesn't have AddFields, so use multiple AddField calls.
-        arcpy.management.AddField(in_table, out_field_name, "TEXT", field_length=out_field_length)
+        arcpy.management.AddField(
+            in_table, out_field_name, "TEXT", field_length=out_field_length)
         arcpy.management.AddField(in_table, out_error_field_name, "TEXT")
 
     decrease_re = re.compile(r"^d", re.IGNORECASE)
@@ -114,7 +118,8 @@ def add_standardized_route_id_field(in_table, route_id_field, direction_field, o
             direction = row[1]
             # Get unsuffixed, standardized route ID.
             try:
-                rid = standardize_route_id(rid, RouteIdSuffixType.has_no_suffix)
+                rid = standardize_route_id(
+                    rid, RouteIdSuffixType.has_no_suffix)
             except ValueError as error:
                 row[3] = "%s" % error
             else:
@@ -253,9 +258,91 @@ def find_route_location(
         in_features_route_id_field,
         route_layer_route_id_field,
         out_fc,
+        out_rid_field="RID",
+        out_error_field="LOC_ERROR",
+        source_oid_field="SOURCE_OID",
         route_id_suffix_type=RouteIdSuffixType.has_both_i_and_d):
     """Given input features, finds location nearest route.
+
+    Args:
+        in_features: Input features to be located. (Feature Layer)
+        route_layer: Route layer containing Linear Referencing System (LRS)
+        in_features_route_id_field: The field in "in_features" that identifies which route the event is on.
+        route_layer_route_id_field: The field in the "route_layer" that contains the unique route identifier.
+        out_fc: Path to the output feature class that this function will create.
+        out_rid_field: Name of the route ID field in the output feature class.
+        out_error_field: The name of the new field for error information that will be created in "out_fc".
+        source_oid_field: The name of the source Object ID field in the output feature class.
+        route_id_suffix_type: Specifies the format of the route id and how direction information is appended (if at all).
     """
-    pass
-    # with arcpy.da.SearchCursor(in_features,)
-    #     pass
+
+    # Split output path into workspace and feature class name.
+    out_workspace, out_fc_name = split_path(out_fc)
+
+    if not out_workspace:
+        raise ValueError(
+            "No workspace specified in output feature class path: '%s'" % out_fc)
+    elif not arcpy.Exists(out_workspace):
+        arcpy.AddError("Workspace does not exist: '%s'." %
+                       out_fc)  # this also raises exception
+    elif not arcpy.env.overwriteOutput and arcpy.Exists(out_fc):
+        arcpy.AddError("Feature class already exists: '%s'" % out_fc)
+
+    route_desc = arcpy.da.Describe(route_layer)
+    spatial_ref = route_desc.spatialReference
+
+    # Create the output feature class
+    arcpy.management.CreateFeatureclass(
+        out_workspace, out_fc_name, "Polyline", None, True, False, spatial_reference=spatial_ref)
+    # Use AddFields if available. (ArcGIS Pro 2.0: Yes, ArcGIS Desktop 10.5.1: No)
+    # Otherwise, default to multiple calls to AddField.
+    if "AddFields_management" in dir(arcpy):
+        arcpy.management.AddFields(out_fc, (
+            [source_oid_field, "LONG", "Source OID", None, None],
+            [out_rid_field, "STRING", "Route ID", 12, None],
+            [out_error_field, "STRING", "Locating Error", None, None]
+        ))
+    else:
+        arcpy.management.AddField(out_fc, source_oid_field,
+                                  "LONG", field_alias="Source OID")
+        arcpy.management.AddField(
+            out_fc, out_rid_field, "STRING", field_length=12, field_alias="Route ID")
+        arcpy.management.AddField(out_fc, out_error_field, field_alias="Locating Error")
+
+    with arcpy.da.InsertCursor(out_fc, [source_oid_field, out_rid_field, out_error_field, "SHAPE@"]) as insert_cursor:
+        # Loop through the input features that have non-null route ID values.
+        with arcpy.da.SearchCursor(in_features, [
+            "@OID",
+            in_features_route_id_field,
+            "SHAPE@"
+        ], "%s IS NOT NULL" % in_features_route_id_field) as search_cursor:
+            for row in search_cursor:
+                in_line = row[2]
+                route_where_clause = "%s = '%s'" % (
+                    route_layer_route_id_field, row[1])
+                with arcpy.da.SearchCursor(route_layer, ["SHAPE@"], route_where_clause) as route_cursor:
+                    # Locate points along route
+                    new_row = None
+                    for route_row in route_cursor:
+                        route_line = route_row[0]
+                        try:
+                            # Snap the first and last points in input line segment to route.
+                            p1 = route_line.snapToLine(in_line.firstPoint)
+                            p2 = route_line.snapToLine(in_line.lastPoint)
+                            # Get the measures of the snapped points.
+                            m1 = route_line.measureOnLine(p1)
+                            m2 = route_line.measureOnLine(p2)
+                            # Get a line segment using the measures.
+                            segment = route_line.segmentAlongLine(m1, m2)
+                        except Exception as ex:
+                            new_row = row[:3] + ("%s" % ex,)
+                        else:
+                            new_row = row[:3] + (None, segment)
+                        break  # There should only be one row
+                    if new_row:
+                        insert_cursor.insertRow(new_row)
+                    else:
+                        # If new_row is None, then there was no match in the input route layer.
+                        # Add a new row with this error message.
+                        new_row = row[:3] + ("Route not found",)
+                        insert_cursor.insertRow(new_row)
