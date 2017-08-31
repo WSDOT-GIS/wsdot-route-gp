@@ -229,7 +229,7 @@ def create_event_feature_class(event_table,
                             else:
                                 out_geom = geom.segmentAlongLine(
                                     begin_m, end_m)
-                        except Exception as ex:
+                        except arcpy.ExecuteError as ex:
                             error = ex
                             arcpy.AddWarning("Error finding event on route: %s @ %s.\n%s" % (
                                 std_route_id, (begin_m, end_m), ex))
@@ -252,7 +252,7 @@ def create_event_feature_class(event_table,
     return out_fc
 
 
-def find_route_location(
+def update_route_location(
         in_features,
         route_layer,
         in_features_route_id_field,
@@ -260,8 +260,7 @@ def find_route_location(
         out_fc,
         out_rid_field="RID",
         out_error_field="LOC_ERROR",
-        source_oid_field="SOURCE_OID",
-        route_id_suffix_type=RouteIdSuffixType.has_both_i_and_d):
+        source_oid_field="SOURCE_OID"):
     """Given input features, finds location nearest route.
 
     Args:
@@ -273,7 +272,6 @@ def find_route_location(
         out_rid_field: Name of the route ID field in the output feature class.
         out_error_field: The name of the new field for error information that will be created in "out_fc".
         source_oid_field: The name of the source Object ID field in the output feature class.
-        route_id_suffix_type: Specifies the format of the route id and how direction information is appended (if at all).
     """
 
     # Split output path into workspace and feature class name.
@@ -288,12 +286,15 @@ def find_route_location(
     elif not arcpy.env.overwriteOutput and arcpy.Exists(out_fc):
         arcpy.AddError("Feature class already exists: '%s'" % out_fc)
 
-    route_desc = arcpy.da.Describe(route_layer)
+    if "Describe" in dir(arcpy.da):
+        route_desc = arcpy.da.Describe(route_layer)
+    else:
+        route_desc = arcpy.Describe(route_layer)
     spatial_ref = route_desc.spatialReference
 
     # Create the output feature class
     arcpy.management.CreateFeatureclass(
-        out_workspace, out_fc_name, "Polyline", None, True, False, spatial_reference=spatial_ref)
+        out_workspace, out_fc_name, "POLYLINE", has_m="ENABLED", spatial_reference=spatial_ref)
     # Use AddFields if available. (ArcGIS Pro 2.0: Yes, ArcGIS Desktop 10.5.1: No)
     # Otherwise, default to multiple calls to AddField.
     if "AddFields_management" in dir(arcpy):
@@ -307,42 +308,66 @@ def find_route_location(
                                   "LONG", field_alias="Source OID")
         arcpy.management.AddField(
             out_fc, out_rid_field, "STRING", field_length=12, field_alias="Route ID")
-        arcpy.management.AddField(out_fc, out_error_field, field_alias="Locating Error")
+        arcpy.management.AddField(out_fc, out_error_field, "STRING", field_alias="Locating Error")
 
-    with arcpy.da.InsertCursor(out_fc, [source_oid_field, out_rid_field, out_error_field, "SHAPE@"]) as insert_cursor:
+    insert_fields = [source_oid_field, out_rid_field, "SHAPE@", out_error_field]
+    search_fields = ["OID@", in_features_route_id_field, "SHAPE@"]
+
+    with arcpy.da.InsertCursor(out_fc, insert_fields) as insert_cursor:
+        # Get search cursor feature count
+        result = arcpy.management.GetCount(in_features)
+        feature_count = int(result.getOutput(0))
+        arcpy.AddMessage("There are %s features" % feature_count)
         # Loop through the input features that have non-null route ID values.
-        with arcpy.da.SearchCursor(in_features, [
-            "@OID",
-            in_features_route_id_field,
-            "SHAPE@"
-        ], "%s IS NOT NULL" % in_features_route_id_field) as search_cursor:
+        i = int(0)
+        with arcpy.da.SearchCursor(in_features, search_fields, "%s IS NOT NULL" % in_features_route_id_field) as search_cursor:
+            arcpy.SetProgressor("step", "Searching features...", 0, feature_count)
             for row in search_cursor:
-                in_line = row[2]
-                route_where_clause = "%s = '%s'" % (
-                    route_layer_route_id_field, row[1])
-                with arcpy.da.SearchCursor(route_layer, ["SHAPE@"], route_where_clause) as route_cursor:
-                    # Locate points along route
-                    new_row = None
-                    for route_row in route_cursor:
-                        route_line = route_row[0]
+                arcpy.SetProgressorLabel("%d of %d" % (i,feature_count))
+                i += 1
+                if arcpy.env.isCancelled:
+                    break
+                try:
+                    in_geometry = row[2]
+                    if not in_geometry:
+                        continue
+                    route_where_clause = "%s = '%s'" % (
+                        route_layer_route_id_field, row[1])
+                    with arcpy.da.SearchCursor(route_layer, ["SHAPE@"], route_where_clause) as route_cursor:
+                        # Locate points along route
+                        new_row = None
+                        for route_row in route_cursor:
+                            if arcpy.env.isCancelled:
+                                break
+                            route_line = route_row[0]
+                            out_geometry = None
+                            try:
+                                if re.match("polyline", in_geometry.type, re.IGNORECASE):
+                                    # Snap the first and last points in input line segment to route.
+                                    p1 = route_line.snapToLine(in_geometry.firstPoint)
+                                    p2 = route_line.snapToLine(in_geometry.lastPoint)
+                                    # Get the measures of the snapped points.
+                                    m1 = route_line.measureOnLine(p1)
+                                    m2 = route_line.measureOnLine(p2)
+                                    # Get a line segment using the measures.
+                                    out_geometry = route_line.segmentAlongLine(m1, m2)
+                                elif re.match("point", in_geometry.type, re.IGNORECASE):
+                                    out_geometry = route_line.snapToLine(in_geometry)
+                                else:
+                                    raise TypeError("Unexpected geometry type: %s" % in_geometry.type)
+                            except arcpy.ExecuteError as ex:
+                                new_row = row[:2] + (None, "%s" % ex)
+                            else:
+                                new_row = row[:2] + (out_geometry, None)
+                            break  # There should only be one row
+                        if not new_row:
+                            # If new_row is None, then there was no match in the input route layer.
+                            # Add a new row with this error message.
+                            new_row = row[:2] + (None, "Route not found")
                         try:
-                            # Snap the first and last points in input line segment to route.
-                            p1 = route_line.snapToLine(in_line.firstPoint)
-                            p2 = route_line.snapToLine(in_line.lastPoint)
-                            # Get the measures of the snapped points.
-                            m1 = route_line.measureOnLine(p1)
-                            m2 = route_line.measureOnLine(p2)
-                            # Get a line segment using the measures.
-                            segment = route_line.segmentAlongLine(m1, m2)
-                        except Exception as ex:
-                            new_row = row[:3] + ("%s" % ex,)
-                        else:
-                            new_row = row[:3] + (None, segment)
-                        break  # There should only be one row
-                    if new_row:
-                        insert_cursor.insertRow(new_row)
-                    else:
-                        # If new_row is None, then there was no match in the input route layer.
-                        # Add a new row with this error message.
-                        new_row = row[:3] + ("Route not found",)
-                        insert_cursor.insertRow(new_row)
+                            insert_cursor.insertRow(new_row)
+                        except RuntimeError as rte:
+                            arcpy.AddWarning("Error inserting row %s" % (new_row,))
+                finally:
+                    arcpy.SetProgressorPosition()
+            arcpy.ResetProgressor()

@@ -2,14 +2,15 @@
 """
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
-import sys
-import os
 import re
 import arcpy
 
 from wsdot.route import (add_standardized_route_id_field,
                          create_event_feature_class,
+                         update_route_location,
                          RouteIdSuffixType)
+
+# pylint:disable=invalid-name,no-self-use,unused-argument,too-few-public-methods,too-many-locals,too-many-branches
 
 _suffix_dict = {
     "NONE": RouteIdSuffixType.has_no_suffix,
@@ -18,11 +19,15 @@ _suffix_dict = {
     "ALL": RouteIdSuffixType.has_i_suffix | RouteIdSuffixType.has_d_suffix
 }
 
+
 def _create_field(**kwargs):
     field = arcpy.Field()
-    field.name = kwargs.get("name")
-    field.aliasName = kwargs.get("aliasName")
-    field.type = kwargs.get("type")
+    if "name" in kwargs:
+        field.name = kwargs["name"]
+    if "aliasName" in kwargs:
+        field.aliasName = kwargs["aliasName"]
+    if "type" in kwargs:
+        field.type = kwargs["type"]
     return field
 
 
@@ -68,7 +73,8 @@ class Toolbox(object):
         self.label = 'WSDOT Route'
         self.alias = 'wsdotroute'
         # List of tool classes associated with this toolbox
-        self.tools = [LocateRouteEvents, AddDirectionedRouteIdField]
+        self.tools = [LocateRouteEvents,
+                      AddDirectionedRouteIdField, UpdateRouteLocation]
 
 
 class AddDirectionedRouteIdField(object):
@@ -156,7 +162,7 @@ class AddDirectionedRouteIdField(object):
 class LocateRouteEvents(object):
     def __init__(self):
         '''Define the tool (tool name is the name of the class).'''
-        self.label = 'LocateRouteEvents'
+        self.label = 'Locate Route Events'
         self.description = 'Locates route events along Washington state routes'
         self.canRunInBackground = True
 
@@ -339,4 +345,89 @@ class LocateRouteEvents(object):
         create_event_feature_class(event_table, route_layer, event_table_route_id_field,
                                    route_layer_route_id_field, begin_measure_field,
                                    end_measure_field, route_id_suffix, out_fc)
+        return
+
+
+class UpdateRouteLocation(object):
+    def __init__(self):
+        '''Define the tool (tool name is the name of the class).'''
+        self.label = 'Update route location'
+        self.description = 'Updates route geometry'
+        self.canRunInBackground = True
+
+    def getParameterInfo(self):
+        '''Define parameter definitions'''
+        in_features_param = arcpy.Parameter("in_features", "Input Features", "Input",
+                                            "GPFeatureLayer", "Required")
+        route_layer_param = arcpy.Parameter("route_layer", "Route Layer", "Input",
+                                            "GPFeatureLayer", "Required")
+        in_features_route_id_field_param = arcpy.Parameter(
+            "in_features_route_id_field",
+            "Input Features Route ID Field",
+            "Input", "Field", "Required")
+        in_features_route_id_field_param.parameterDependencies = [
+            in_features_param.name]
+        in_features_route_id_field_param.filter.list = [
+            "TEXT"
+        ]
+        route_layer_route_id_field_param = arcpy.Parameter(
+            "route_layer_route_id_field",
+            "Route Layer Route ID Field",
+            "Input", "Field", "Required")
+        route_layer_route_id_field_param.filter.list = [
+            "TEXT"
+        ]
+        route_layer_route_id_field_param.parameterDependencies = [
+            route_layer_param.name]
+        out_fc_param = arcpy.Parameter("out_fc", "Output Feature Class", "Output",
+                                       "DEFeatureClass", "Required")
+
+        out_fc_param.schema.featureTypeRule = "AsSpecified"
+        out_fc_param.schema.featureType = "Simple"
+        out_fc_param.schema.fieldsRule = "None"
+
+        out_fc_param.schema.additionalFields = [
+            _create_field(**{
+                "name": "RID",
+                "aliasName": "Route ID",
+                "type": "String",
+            }),
+            _create_field(**{
+                "name": "LocatingError",
+                "aliasName": "Locating Error",
+                "type": "String"
+            }),
+            _create_field(**{
+                "name": "SourceOID",
+                "aliasName": "Source OID",
+                "type": "Integer"
+            })
+        ]
+
+        return [
+            in_features_param,
+            route_layer_param,
+            in_features_route_id_field_param,
+            route_layer_route_id_field_param,
+            out_fc_param
+        ]
+
+    def isLicensed(self):
+        '''Set whether tool is licensed to execute.'''
+        return True
+
+    def updateParameters(self, parameters):
+        '''Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed.'''
+        return
+
+    def updateMessages(self, parameters):
+        '''Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation.'''
+        return
+
+    def execute(self, parameters, messages):
+        '''The source code of the tool.'''
+        update_route_location(*map(lambda p: p.valueAsText, parameters))
         return
