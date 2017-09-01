@@ -1,1 +1,0 @@
-Get-ChildItem "**/*.pyc" -Recurse | Remove-Item
