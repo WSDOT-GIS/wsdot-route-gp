@@ -93,10 +93,12 @@ class AddDirectionedRouteIdField(object):
         route_id_field_param = arcpy.Parameter("route_id_field", "Route ID Field", "Input",
                                                "Field", "Required")
         route_id_field_param.parameterDependencies = [table_param.name]
+        route_id_field_param.filter.list = ['Text']
 
         direction_field_param = arcpy.Parameter("direction_field", "Direction Field", "Input",
                                                 "Field", "Required")
         direction_field_param.parameterDependencies = [table_param.name]
+        direction_field_param.filter.list = ['Text']
 
         out_route_id_field_name_param = arcpy.Parameter(
             "out_route_id_field_name", "Output route ID field name",
@@ -135,8 +137,21 @@ class AddDirectionedRouteIdField(object):
         '''Modify the values and properties of parameters before internal
         validation is performed.  This method is called whenever a parameter
         has been changed.'''
-        # TODO: Update output schema when new field name parameters have values.
+        # Update output schema when new field name parameters have values.
+        out_route_id_field_name_param, out_error_field_name_param = parameters[3:5]
+        out_table_param = parameters[-1]
+
+        if out_error_field_name_param.altered or out_route_id_field_name_param.altered:
+            new_fields = []
+            if out_route_id_field_name_param.valueAsText:
+                new_fields.append(_create_field(name=out_route_id_field_name_param.valueAsText, type="String"))
+            if out_error_field_name_param.valueAsText:
+                new_fields.append(_create_field(name=out_error_field_name_param.valueAsText, type="String"))
+            out_table_param.schema.additionalFields = new_fields
+
         # TODO: Make sure new field names are valid and don't already exist in table.
+
+
         return
 
     def updateMessages(self, parameters):
@@ -401,6 +416,16 @@ class UpdateRouteLocation(object):
                 "name": "SourceOID",
                 "aliasName": "Source OID",
                 "type": "Integer"
+            }),
+            _create_field(**{
+                "name": "M1",
+                "aliasName": "Measure",
+                "type": "Double"
+            }),
+            _create_field(**{
+                "name": "M2",
+                "aliasName": "End Measure",
+                "type": "Double"
             })
         ]
 
