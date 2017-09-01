@@ -12,8 +12,13 @@
     See https://pro.arcgis.com/en/pro-app/arcpy/geoprocessing_and_python/extending-geoprocessing-through-python-modules.htm
 #>
 
-$src = ".\src\wsdot\route\esri\toolboxes"
-$dest = ".\src\wsdot\route\esri\help\gp\toolboxes"
+$commonRoot = ".\src\wsdot\route\esri"
+$src = "$commonRoot\toolboxes"
+$dest = "$commonRoot\help\gp\toolboxes"
 Write-Host "Copying metadata files"
+if (-not (Resolve-Path $dest -ErrorAction Ignore)) {
+    Write-Host "Creating output directory"
+    New-Item $dest -ItemType Directory
+}
 Get-ChildItem "$src\*.xml" | Copy-Item -Destination $dest
 Write-Host "Completed copying metadata XML files" -ForegroundColor Green
