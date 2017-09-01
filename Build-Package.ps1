@@ -8,6 +8,8 @@
 $readmeCopy = "README.txt"
 Copy-Item .\README.md $readmeCopy
 
+.\Copy-Metadata.ps1
+
 try {
     foreach ($argumentSet in @("sdist", "bdist_wheel")) {
         Start-Process python "setup.py  $argumentSet" -Wait -NoNewWindow
