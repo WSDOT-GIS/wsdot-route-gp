@@ -23,6 +23,7 @@ setup(
     long_description=long_description,
     url="https://github.com/WSDOT-GIS/wsdot-route-gp",
     author='WSDOT',
+    author_email='WSDOTGISDevelopers@WSDOT.WA.GOV',
     license="Unlicense",
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -42,5 +43,5 @@ setup(
     keywords="WA Washington WSDOT transportation department state linear referencing route",
     packages=['wsdot.route'],
     package_dir={'wsdot.route': 'src/wsdot/route'},
-    package_data={'wsdot.route': ['esri/toolboxes/*.*']}
+    package_data={'wsdot.route': ['esri/toolboxes/*.pyt', 'esri/help/gp/toolboxes/*']}
 )
