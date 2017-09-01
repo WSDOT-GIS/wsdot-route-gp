@@ -3,6 +3,8 @@
     Runs Pylint on *.py and *.pyt files.
 .DESCRIPTION
     Runs Pylint on *.py and *.pyt files.
+.OUTPUTS
+    Table of Pylint result messages, grouped by module / filename.
 .NOTES
     The reason for this script is that Pylint will not automatically recognize *.pyt files as Python scripts and will skip them.
     This script explicitly states the list of files.
