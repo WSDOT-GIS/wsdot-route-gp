@@ -262,18 +262,12 @@ def create_event_feature_class(event_table,
 
     return out_fc
 
-
-def _feet_to_miles(feet):
-    if feet:
-        return feet / 5280
-
-
 def update_route_location(
         in_features,
         route_layer,
         in_features_route_id_field,
         route_layer_route_id_field,
-        out_fc, feet_to_miles=True):
+        out_fc):
     """Given input features, finds location nearest route.
 
     Args:
@@ -343,6 +337,9 @@ def update_route_location(
                      out_rid_field, "SHAPE@", out_error_field, m1_field, m2_field]
     search_fields = ["OID@", in_features_route_id_field, "SHAPE@"]
 
+    pointRe = re.compile(r"^point$", re.IGNORECASE)
+    polylineRe = re.compile(r"^polyline$", re.IGNORECASE)
+
     with arcpy.da.InsertCursor(out_fc, insert_fields) as insert_cursor:
         # Get search cursor feature count
         result = arcpy.management.GetCount(in_features)
@@ -371,9 +368,10 @@ def update_route_location(
                             if arcpy.env.isCancelled:
                                 break
                             route_line = route_row[0]
-                            out_geometry, m1, m2 = (None,) * 3
+                            # Initialize route event geometry to None.
+                            out_geometry = None
                             try:
-                                if re.match("polyline", in_geometry.type, re.IGNORECASE):
+                                if polylineRe.match(in_geometry.type):
                                     # Snap the first and last points in input line segment to route.
                                     p1 = route_line.snapToLine(
                                         in_geometry.firstPoint)
@@ -385,7 +383,7 @@ def update_route_location(
                                     # Get a line segment using the measures.
                                     out_geometry = route_line.segmentAlongLine(
                                         m1, m2)
-                                elif re.match("point", in_geometry.type, re.IGNORECASE):
+                                elif pointRe.match(in_geometry.type):
                                     out_geometry = route_line.snapToLine(
                                         in_geometry)
                                     m1 = route_line.measureOnLine(out_geometry)
@@ -396,10 +394,17 @@ def update_route_location(
                                 new_row = row[:2] + \
                                     (None, "%s" % ex, None, None)
                             else:
-                                if feet_to_miles:
-                                    new_row = row[:2] + (out_geometry, None, _feet_to_miles(m1),
-                                                        _feet_to_miles(m2))
-                                else:
+                                if out_geometry:
+                                    # Initialize null measures
+                                    m1, m2 = (None,) * 2
+
+                                    # For lines, set m1 and m2 to line start and end points' measures.
+                                    # For points, set m1 to output_geometry point's measure and leave m2 as None.
+                                    if polylineRe.match(out_geometry.type):
+                                        m1, m2 = map(lambda point: point.M, (out_geometry.firstPoint, out_geometry.lastPoint))
+                                    elif pointRe.match(out_geometry.type):
+                                        m1 = out_geometry.firstPoint.M
+
                                     new_row = row[:2] + (out_geometry, None, m1, m2)
                             break  # There should only be one row
                         if not new_row:
