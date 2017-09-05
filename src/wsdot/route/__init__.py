@@ -386,7 +386,6 @@ def update_route_location(
                                 elif pointRe.match(in_geometry.type):
                                     out_geometry = route_line.snapToLine(
                                         in_geometry)
-                                    m1 = route_line.measureOnLine(out_geometry)
                                 else:
                                     raise TypeError(
                                         "Unexpected geometry type: %s" % in_geometry.type)
