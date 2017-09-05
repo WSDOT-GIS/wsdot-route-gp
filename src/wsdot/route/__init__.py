@@ -263,12 +263,17 @@ def create_event_feature_class(event_table,
     return out_fc
 
 
+def _feet_to_miles(feet):
+    if feet:
+        return feet / 5280
+
+
 def update_route_location(
         in_features,
         route_layer,
         in_features_route_id_field,
         route_layer_route_id_field,
-        out_fc):
+        out_fc, feet_to_miles=True):
     """Given input features, finds location nearest route.
 
     Args:
@@ -309,7 +314,8 @@ def update_route_location(
         in_features_desc = arcpy.Describe(in_features)
 
     if not re.match(r"^(?:(?:Point)|(?:Polyline))$", in_features_desc.shapeType, re.IGNORECASE):
-        raise TypeError("Input feature class must be either Point or Polyline.")
+        raise TypeError(
+            "Input feature class must be either Point or Polyline.")
 
     spatial_ref = route_desc.spatialReference
 
@@ -330,7 +336,8 @@ def update_route_location(
         arcpy.management.AddFields(out_fc, field_defs)
     else:
         for field_def in field_defs:
-            arcpy.management.AddField(out_fc, field_def[0], field_def[1], field_alias=field_def[2], field_length=field_def[3])
+            arcpy.management.AddField(
+                out_fc, field_def[0], field_def[1], field_alias=field_def[2], field_length=field_def[3])
 
     insert_fields = [source_oid_field,
                      out_rid_field, "SHAPE@", out_error_field, m1_field, m2_field]
@@ -386,9 +393,14 @@ def update_route_location(
                                     raise TypeError(
                                         "Unexpected geometry type: %s" % in_geometry.type)
                             except arcpy.ExecuteError as ex:
-                                new_row = row[:2] + (None, "%s" % ex, None, None)
+                                new_row = row[:2] + \
+                                    (None, "%s" % ex, None, None)
                             else:
-                                new_row = row[:2] + (out_geometry, None, m1, m2)
+                                if feet_to_miles:
+                                    new_row = row[:2] + (out_geometry, None, _feet_to_miles(m1),
+                                                        _feet_to_miles(m2))
+                                else:
+                                    new_row = row[:2] + (out_geometry, None, m1, m2)
                             break  # There should only be one row
                         if not new_row:
                             # If new_row is None, then there was no match in the input route layer.
