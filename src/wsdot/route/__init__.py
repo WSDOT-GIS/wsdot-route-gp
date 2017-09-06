@@ -6,6 +6,10 @@ from __future__ import (unicode_literals, print_function, division,
 import re
 from os.path import split as split_path, join as join_path
 import arcpy
+try:
+    from arcpy.da import Describe
+except ImportError:
+    from arcpy import Describe
 
 
 class RouteIdSuffixType(object):
@@ -193,7 +197,7 @@ def create_event_feature_class(event_table,
 
     # Create the output feature class.
     workspace, fc_name = split_path(out_fc)
-    routes_desc = arcpy.Describe(route_layer)
+    routes_desc = Describe(route_layer)
     # arcpy.management.CreateFeatureclass(workspace, fc_name, out_geo_type, None, "ENABLED",
     #                                     "DISABLED", routes_desc.spatialReference)
     arcpy.management.CreateFeatureclass(workspace, fc_name, out_geo_type,
@@ -262,12 +266,74 @@ def create_event_feature_class(event_table,
 
     return out_fc
 
+
+def field_list_contains(fields, name, type_re=re.compile(r"^(?:(?:String)|(?:Text))$", re.IGNORECASE)):
+    """Determines if a list of fields contains a field with the given name and type.
+
+    Args:
+        fields: A Python list of fields. This can be acquired from arcpy.ListFields or arcpy(.da).Describe.
+        name: The name of the field to search for. Match is case-insensitive.
+        type_re: An re that matches the given field type. Defaults to match either "String" or "Text"
+                 (case-insensitive).
+
+    Returns:
+        Returns a tuple with two boolean values. The first tells if the field with the given name is
+        contained in the list; the second tells if the type of the field matches the desired type.
+        (This second value will always be False if the field is not found.)
+
+    Example:
+        fields = arcpy.ListFields(r"c:/temp/example.gdb/my_features")
+        field_exists, correct_type = _field_list_contains(fields, "LOC_ERROR")
+    """
+    field_exists = False
+    correct_type = False
+    name_re = re.compile("^%s$" % name)
+    for field in fields:
+        if name_re.match(field.baseName) or name_re.match(field.name):
+            field_exists = True
+            if type_re.match(field.type):
+                correct_type = True
+            break
+    return field_exists, correct_type
+
+def get_measures(in_geometry, route_geometry):
+    """Finds the nearest point or route segement along a route polyline.
+
+    Args:
+        in_geometry: Either a PointGeometry or a Polyline.
+        route_geometry: A route Polyline.
+
+    Returns:
+        A tuple with the following values
+            * located geometry
+            * begin measure (or only measure for points)
+            * end measure (or None for points)
+    """
+    if not isinstance(route_geometry, arcpy.Polyline):
+        raise TypeError("route_geometry must be a Polyline.")
+
+    m1, m2, out_geometry = (None,) * 3
+    if isinstance(in_geometry, arcpy.PointGeometry):
+        # nearest_point, distance_from_start, min_distance, right_side =  route_geometry.queryPointAndDistance(in_geometry.firstPoint)
+        out_geometry = route_geometry.snapToLine(in_geometry.firstPoint)
+        m1 = out_geometry.firstPoint.M
+    elif isinstance(in_geometry, arcpy.Polyline):
+        p1, p2 = map(route_geometry.snapToLine, (in_geometry.firstPoint, in_geometry.lastPoint))
+        m1 = p1.firstPoint.M
+        m2 = p2.firstPoint.M
+        out_geometry = route_geometry.segmentAlongLine(m1, m2)
+    else:
+        raise TypeError("Invalid geometry type")
+    return out_geometry, m1, m2
+
 def update_route_location(
         in_features,
         route_layer,
         in_features_route_id_field,
         route_layer_route_id_field,
-        out_fc):
+        measure_field,
+        end_measure_field=None,
+        rounding_digits=None):
     """Given input features, finds location nearest route.
 
     Args:
@@ -275,37 +341,23 @@ def update_route_location(
         route_layer: Route layer containing Linear Referencing System (LRS)
         in_features_route_id_field: The field in "in_features" that identifies which route the event is on.
         route_layer_route_id_field: The field in the "route_layer" that contains the unique route identifier.
-        out_fc: Path to the output feature class that this function will create.
+        measure_field: The field in the input features with begin measures (for lines) or a point's measure (for points).
+        end_measure_field: The field in the input features with end measures (for lines). Not used if in_features are points.
+        rounding_digits: The number of digits to round to.
     """
 
-    # Split output path into workspace and feature class name.
-    out_workspace, out_fc_name = split_path(out_fc)
+    # Convert rounding digits to integer
+    if not isinstance(rounding_digits, (int, type(None))):
+        rounding_digits = int(rounding_digits)
 
     # out_rid_field: Name of the route ID field in the output feature class.
     # out_error_field: The name of the new field for error information that will be created in "out_fc".
     # source_oid_field: The name of the source Object ID field in the output feature class.
 
-    out_rid_field = "RID"
     out_error_field = "LOC_ERROR"
-    source_oid_field = "SOURCE_OID"
-    m1_field = "M"
-    m2_field = "M2"
 
-    if not out_workspace:
-        raise ValueError(
-            "No workspace specified in output feature class path: '%s'" % out_fc)
-    elif not arcpy.Exists(out_workspace):
-        arcpy.AddError("Workspace does not exist: '%s'." %
-                       out_fc)  # this also raises exception
-    elif not arcpy.env.overwriteOutput and arcpy.Exists(out_fc):
-        arcpy.AddError("Feature class already exists: '%s'" % out_fc)
-
-    if "Describe" in dir(arcpy.da):
-        route_desc = arcpy.da.Describe(route_layer)
-        in_features_desc = arcpy.da.Describe(in_features)
-    else:
-        route_desc = arcpy.Describe(route_layer)
-        in_features_desc = arcpy.Describe(in_features)
+    route_desc = Describe(route_layer)
+    in_features_desc = Describe(in_features)
 
     if not re.match(r"^(?:(?:Point)|(?:Polyline))$", in_features_desc.shapeType, re.IGNORECASE):
         raise TypeError(
@@ -313,108 +365,58 @@ def update_route_location(
 
     spatial_ref = route_desc.spatialReference
 
-    # Create the output feature class
-    arcpy.management.CreateFeatureclass(
-        out_workspace, out_fc_name, in_features_desc.shapeType.upper(), has_m="ENABLED", spatial_reference=spatial_ref)
-    # Use AddFields if available. (ArcGIS Pro 2.0: Yes, ArcGIS Desktop 10.5.1: No)
-    # Otherwise, default to multiple calls to AddField.
+    field_exists, correct_type = field_list_contains(
+        in_features_desc.fields, out_error_field)
 
-    field_defs = (
-        [source_oid_field, "LONG", "Source OID", None, None],
-        [out_rid_field, "STRING", "Route ID", 12, None],
-        [out_error_field, "STRING", "Locating Error", None, None],
-        [m1_field, "DOUBLE", "Measure", None, None],
-        [m2_field, "DOUBLE", "End Measure", None, None])
-
-    if "AddFields_management" in dir(arcpy):
-        arcpy.management.AddFields(out_fc, field_defs)
+    if not field_exists:
+        arcpy.management.AddField(
+            in_features, out_error_field, "STRING", field_alias="Locating Error")
+    elif not correct_type:
+        arcpy.AddError(
+            "Field '%s' already exists in table but is not the correct type." % out_error_field)
     else:
-        for field_def in field_defs:
-            arcpy.management.AddField(
-                out_fc, field_def[0], field_def[1], field_alias=field_def[2], field_length=field_def[3])
+        arcpy.AddWarning(
+            "Field '%s' already exists and its data will be overwritten." % out_error_field)
 
-    insert_fields = [source_oid_field,
-                     out_rid_field, "SHAPE@", out_error_field, m1_field, m2_field]
-    search_fields = ["OID@", in_features_route_id_field, "SHAPE@"]
+    update_fields = [in_features_route_id_field, "SHAPE@", out_error_field, measure_field]
+    if end_measure_field:
+        update_fields.append(end_measure_field)
 
-    pointRe = re.compile(r"^point$", re.IGNORECASE)
-    polylineRe = re.compile(r"^polyline$", re.IGNORECASE)
+    # Get search cursor feature count
+    result = arcpy.management.GetCount(in_features)
+    feature_count = int(result.getOutput(0))
 
-    with arcpy.da.InsertCursor(out_fc, insert_fields) as insert_cursor:
-        # Get search cursor feature count
-        result = arcpy.management.GetCount(in_features)
-        feature_count = int(result.getOutput(0))
-        arcpy.AddMessage("There are %s features" % feature_count)
-        # Loop through the input features that have non-null route ID values.
-        i = int(0)
-        with arcpy.da.SearchCursor(in_features, search_fields, "%s IS NOT NULL" % in_features_route_id_field) as search_cursor:
-            arcpy.SetProgressor(
-                "step", "Searching features...", 0, feature_count)
-            for row in search_cursor:
-                arcpy.SetProgressorLabel("%d of %d" % (i, feature_count))
-                i += 1
-                if arcpy.env.isCancelled:
+    error_count = 0
+
+    with arcpy.da.UpdateCursor(in_features, update_fields, "%s IS NOT NULL" % in_features_route_id_field, spatial_ref) as update_cursor:
+        for row in update_cursor:
+            in_route_id, event_geometry = row[:2]
+
+
+            if not event_geometry:
+                row[2] = "Event geometry is NULL."
+                continue
+
+            with arcpy.da.SearchCursor(route_layer, ["SHAPE@"], "%s = '%s'" % (route_layer_route_id_field, in_route_id)) as route_cursor:
+                route_geometry = None
+                for route_row in route_cursor:
+                    route_geometry = route_row[0]
+                    updated_geometry, m1, m2 = get_measures(event_geometry, route_geometry)
+                    if rounding_digits is not None:
+                        if m1:
+                            m1 = round(m1, rounding_digits)
+                        if m2:
+                            m2 = round(m2, rounding_digits)
+                    # row[1] = updated_geometry
+                    row[2] = None
+                    row[3] = m1
+                    if end_measure_field:
+                        row[4] = m2
                     break
-                try:
-                    in_geometry = row[2]
-                    if not in_geometry:
-                        continue
-                    route_where_clause = "%s = '%s'" % (
-                        route_layer_route_id_field, row[1])
-                    with arcpy.da.SearchCursor(route_layer, ["SHAPE@"], route_where_clause) as route_cursor:
-                        # Locate points along route
-                        new_row = None
-                        for route_row in route_cursor:
-                            if arcpy.env.isCancelled:
-                                break
-                            route_line = route_row[0]
-                            # Initialize route event geometry to None.
-                            out_geometry = None
-                            try:
-                                if polylineRe.match(in_geometry.type):
-                                    # Snap the first and last points in input line segment to route.
-                                    p1 = route_line.snapToLine(
-                                        in_geometry.firstPoint)
-                                    p2 = route_line.snapToLine(
-                                        in_geometry.lastPoint)
-                                    # Get the measures of the snapped points.
-                                    m1 = route_line.measureOnLine(p1)
-                                    m2 = route_line.measureOnLine(p2)
-                                    # Get a line segment using the measures.
-                                    out_geometry = route_line.segmentAlongLine(
-                                        m1, m2)
-                                elif pointRe.match(in_geometry.type):
-                                    out_geometry = route_line.snapToLine(
-                                        in_geometry)
-                                else:
-                                    raise TypeError(
-                                        "Unexpected geometry type: %s" % in_geometry.type)
-                            except arcpy.ExecuteError as ex:
-                                new_row = row[:2] + \
-                                    (None, "%s" % ex, None, None)
-                            else:
-                                if out_geometry:
-                                    # Initialize null measures
-                                    m1, m2 = (None,) * 2
+                if not route_geometry:
+                    row[2] = "Route not found: %s" % in_route_id
+                    error_count += 1
+            update_cursor.updateRow(row)
 
-                                    # For lines, set m1 and m2 to line start and end points' measures.
-                                    # For points, set m1 to output_geometry point's measure and leave m2 as None.
-                                    if polylineRe.match(out_geometry.type):
-                                        m1, m2 = map(lambda point: point.M, (out_geometry.firstPoint, out_geometry.lastPoint))
-                                    elif pointRe.match(out_geometry.type):
-                                        m1 = out_geometry.firstPoint.M
-
-                                    new_row = row[:2] + (out_geometry, None, m1, m2)
-                            break  # There should only be one row
-                        if not new_row:
-                            # If new_row is None, then there was no match in the input route layer.
-                            # Add a new row with this error message.
-                            new_row = row[:2] + (None, "Route not found", None, None)
-                        try:
-                            insert_cursor.insertRow(new_row)
-                        except RuntimeError as rte:
-                            arcpy.AddWarning(
-                                "Error inserting row %s\n%s" % (new_row, rte))
-                finally:
-                    arcpy.SetProgressorPosition()
-            arcpy.ResetProgressor()
+    if error_count:
+        arcpy.AddWarning("Unable to locate %d out of %d events." % (error_count, feature_count))

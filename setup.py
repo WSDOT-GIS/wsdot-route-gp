@@ -18,7 +18,7 @@ with codec_open(path.join(HERE, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='wsdot.route',
-    version='1.1.0',
+    version='2.0.0-alpha.1',
     description="Geoprocessing tools for locating along WA LRS",
     long_description=long_description,
     url="https://github.com/WSDOT-GIS/wsdot-route-gp",

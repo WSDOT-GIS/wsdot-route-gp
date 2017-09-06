@@ -373,18 +373,21 @@ class UpdateRouteLocation(object):
     def getParameterInfo(self):
         '''Define parameter definitions'''
         in_features_param = arcpy.Parameter("in_features", "Input Features", "Input",
-                                            "GPFeatureLayer", "Required")
+                                            "DEFeatureClass", "Required")
+        in_features_param.filter.list = ["Point", "Polyline"]
+
         route_layer_param = arcpy.Parameter("route_layer", "Route Layer", "Input",
-                                            "GPFeatureLayer", "Required")
+                                            "DEFeatureClass", "Required")
+        route_layer_param.filter.list = ["Polyline"]
+
         in_features_route_id_field_param = arcpy.Parameter(
             "in_features_route_id_field",
             "Input Features Route ID Field",
             "Input", "Field", "Required")
         in_features_route_id_field_param.parameterDependencies = [
             in_features_param.name]
-        in_features_route_id_field_param.filter.list = [
-            "TEXT"
-        ]
+        in_features_route_id_field_param.filter.list = ["TEXT"]
+
         route_layer_route_id_field_param = arcpy.Parameter(
             "route_layer_route_id_field",
             "Route Layer Route ID Field",
@@ -394,47 +397,36 @@ class UpdateRouteLocation(object):
         ]
         route_layer_route_id_field_param.parameterDependencies = [
             route_layer_param.name]
+
+        measure_field_param = arcpy.Parameter("measure_field", "Measure Field", "Input", "Field", "Required")
+        measure_field_2_param = arcpy.Parameter("end_measure_field", "End Measure Field", "Input", "Field", "Optional")
+
+        for p in (measure_field_param, measure_field_2_param):
+            p.parameterDependencies = [in_features_param.name]
+            p.filter.list = [
+                "FLOAT",
+                "DOUBLE",
+                "SINGLE"
+            ]
+
+        rounding_digits_param = arcpy.Parameter("rounding_digits", "Number of digits for rounding", "Input", "Long", "Optional")
+        rounding_digits_param.value = 3
+
         out_fc_param = arcpy.Parameter("out_fc", "Output Feature Class", "Output",
-                                       "DEFeatureClass", "Required")
+                                       "DEFeatureClass", "Derived")
 
-        out_fc_param.schema.featureTypeRule = "AsSpecified"
-        out_fc_param.schema.featureType = "Simple"
-        out_fc_param.schema.fieldsRule = "None"
-
-        out_fc_param.schema.additionalFields = [
-            _create_field(**{
-                "name": "RID",
-                "aliasName": "Route ID",
-                "type": "String",
-            }),
-            _create_field(**{
-                "name": "LocatingError",
-                "aliasName": "Locating Error",
-                "type": "String"
-            }),
-            _create_field(**{
-                "name": "SourceOID",
-                "aliasName": "Source OID",
-                "type": "Integer"
-            }),
-            _create_field(**{
-                "name": "M1",
-                "aliasName": "Measure",
-                "type": "Double"
-            }),
-            _create_field(**{
-                "name": "M2",
-                "aliasName": "End Measure",
-                "type": "Double"
-            })
-        ]
+        out_fc_param.parameterDependencies = [in_features_param.name]
+        out_fc_param.schema.clone = True
 
         return [
             in_features_param,
             route_layer_param,
             in_features_route_id_field_param,
             route_layer_route_id_field_param,
-            out_fc_param
+            measure_field_param,
+            measure_field_2_param,
+            rounding_digits_param,
+            out_fc_param,
         ]
 
     def isLicensed(self):
@@ -454,5 +446,5 @@ class UpdateRouteLocation(object):
 
     def execute(self, parameters, messages):
         '''The source code of the tool.'''
-        update_route_location(*map(lambda p: p.valueAsText, parameters))
+        update_route_location(*map(lambda p: p.valueAsText, parameters[:-1]))
         return
