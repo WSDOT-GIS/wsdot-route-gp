@@ -40,7 +40,7 @@ def _get_first_field(fields, regex, *typeOrTypes):
         regex: A regular expression that will be used to match field name.
             If a str is provided, it will be converted to re with re.IGNORECASE
             option.
-        typeOrType: Either a single type or a collection of field type names
+        typeOrTypes: Either a single type or a collection of field type names
     Returns:
         Returns the first field matching the given conditions, or None if
         there are no matches.
