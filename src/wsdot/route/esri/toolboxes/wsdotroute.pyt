@@ -5,10 +5,26 @@ from __future__ import (absolute_import, division, print_function,
 import re
 import arcpy
 
-from wsdot.route import (add_standardized_route_id_field,
-                         create_event_feature_class,
-                         update_route_location,
-                         RouteIdSuffixType)
+try:
+    from wsdot.route import (add_standardized_route_id_field,
+                             create_event_feature_class,
+                             update_route_location,
+                             RouteIdSuffixType)
+except ImportError:
+    from sys import path
+    from os.path import abspath, dirname, join as join_path
+    path.append(
+        abspath(
+            join_path(
+                dirname(__file__),
+                *("..",) * 4
+            )
+        )
+    )
+    from wsdot.route import (add_standardized_route_id_field,
+                             create_event_feature_class,
+                             update_route_location,
+                             RouteIdSuffixType)
 
 # pylint:disable=invalid-name,no-self-use,unused-argument,too-few-public-methods,too-many-locals,too-many-branches
 
@@ -144,13 +160,14 @@ class AddDirectionedRouteIdField(object):
         if out_error_field_name_param.altered or out_route_id_field_name_param.altered:
             new_fields = []
             if out_route_id_field_name_param.valueAsText:
-                new_fields.append(_create_field(name=out_route_id_field_name_param.valueAsText, type="String"))
+                new_fields.append(_create_field(
+                    name=out_route_id_field_name_param.valueAsText, type="String"))
             if out_error_field_name_param.valueAsText:
-                new_fields.append(_create_field(name=out_error_field_name_param.valueAsText, type="String"))
+                new_fields.append(_create_field(
+                    name=out_error_field_name_param.valueAsText, type="String"))
             out_table_param.schema.additionalFields = new_fields
 
         # TODO: Make sure new field names are valid and don't already exist in table.
-
 
         return
 
@@ -398,8 +415,10 @@ class UpdateRouteLocation(object):
         route_layer_route_id_field_param.parameterDependencies = [
             route_layer_param.name]
 
-        measure_field_param = arcpy.Parameter("measure_field", "Measure Field", "Input", "Field", "Required")
-        measure_field_2_param = arcpy.Parameter("end_measure_field", "End Measure Field", "Input", "Field", "Optional")
+        measure_field_param = arcpy.Parameter(
+            "measure_field", "Measure Field", "Input", "Field", "Required")
+        measure_field_2_param = arcpy.Parameter(
+            "end_measure_field", "End Measure Field", "Input", "Field", "Optional")
 
         for p in (measure_field_param, measure_field_2_param):
             p.parameterDependencies = [in_features_param.name]
@@ -409,7 +428,8 @@ class UpdateRouteLocation(object):
                 "SINGLE"
             ]
 
-        rounding_digits_param = arcpy.Parameter("rounding_digits", "Number of digits for rounding", "Input", "Long", "Optional")
+        rounding_digits_param = arcpy.Parameter(
+            "rounding_digits", "Number of digits for rounding", "Input", "Long", "Optional")
         rounding_digits_param.value = 3
 
         out_fc_param = arcpy.Parameter("out_fc", "Output Feature Class", "Output",
