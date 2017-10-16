@@ -2,7 +2,7 @@ from __future__ import unicode_literals, print_function, division, absolute_impo
 
 from os.path import split
 import unittest
-from wsdot.route import add_standardized_route_id_field, RouteIdSuffixType
+from wsdotroute import add_standardized_route_id_field, RouteIdSuffixType
 import arcpy
 
 class TestAddField(unittest.TestCase):

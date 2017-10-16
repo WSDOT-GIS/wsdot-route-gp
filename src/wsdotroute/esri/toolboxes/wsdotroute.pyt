@@ -6,10 +6,10 @@ import re
 import arcpy
 
 try:
-    from wsdot.route import (add_standardized_route_id_field,
-                             create_event_feature_class,
-                             update_route_location,
-                             RouteIdSuffixType)
+    from wsdotroute import (add_standardized_route_id_field,
+                            create_event_feature_class,
+                            update_route_location,
+                            RouteIdSuffixType)
 except ImportError:
     from sys import path
     from os.path import abspath, dirname, join as join_path
@@ -17,14 +17,14 @@ except ImportError:
         abspath(
             join_path(
                 dirname(__file__),
-                *("..",) * 4
+                *("..",) * 3
             )
         )
     )
-    from wsdot.route import (add_standardized_route_id_field,
-                             create_event_feature_class,
-                             update_route_location,
-                             RouteIdSuffixType)
+    from wsdotroute import (add_standardized_route_id_field,
+                            create_event_feature_class,
+                            update_route_location,
+                            RouteIdSuffixType)
 
 # pylint:disable=invalid-name,no-self-use,unused-argument,too-few-public-methods,too-many-locals,too-many-branches
 

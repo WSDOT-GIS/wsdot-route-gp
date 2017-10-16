@@ -1,4 +1,4 @@
-"""unit test for wsdot.route module
+"""unit test for wsdotroute module
 """
 from __future__ import (unicode_literals, print_function, division,
                         absolute_import)
@@ -18,7 +18,7 @@ class TestWsdotRoute(unittest.TestCase):
         if 'wsdotroute' not in dir(arcpy):
             toolbox_path = os.path.join(
                 os.path.split(__file__)[0], # script's directory
-                "wsdot", "route", "esri", "toolboxes", "wsdotroute.pyt"
+                "wsdotroute", "esri", "toolboxes", "wsdotroute.pyt"
             )
             if not os.path.exists(toolbox_path):
                 raise FileNotFoundError(toolbox_path)

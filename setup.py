@@ -17,8 +17,8 @@ with codec_open(path.join(HERE, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='wsdot.route',
-    version='2.0.0-beta.2',
+    name='wsdotroute',
+    version='2.0.0-beta.3',
     description="Geoprocessing tools for locating along WA LRS",
     long_description=long_description,
     url="https://github.com/WSDOT-GIS/wsdot-route-gp",
@@ -41,7 +41,7 @@ setup(
         "Topic :: Utilities"
     ],
     keywords="WA Washington WSDOT transportation department state linear referencing route",
-    packages=['wsdot.route'],
-    package_dir={'wsdot.route': 'src/wsdot/route'},
-    package_data={'wsdot.route': ['esri/toolboxes/*.pyt', 'esri/help/gp/toolboxes/*']}
+    packages=['wsdotroute'],
+    package_dir={'wsdotroute': 'src/wsdotroute'},
+    package_data={'wsdotroute': ['esri/toolboxes/*.pyt', 'esri/help/gp/toolboxes/*']}
 )

@@ -5,8 +5,8 @@
 		<CreaTime>15500700</CreaTime>
 		<ArcGISFormat>1.0</ArcGISFormat>
 		<SyncOnce>TRUE</SyncOnce>
-		<ModDate>20171005</ModDate>
-		<ModTime>175249</ModTime>
+		<ModDate>20171016</ModDate>
+		<ModTime>125827</ModTime>
 		<scaleRange>
 			<minScale>150000000</minScale>
 			<maxScale>5000</maxScale>
@@ -14,7 +14,7 @@
 		<ArcGISProfile>ItemDescription</ArcGISProfile>
 	</Esri>
 	<toolbox name="wsdotroute" alias="wsdotroute">
-		<arcToolboxHelpPath>c:\program files (x86)\arcgis\desktop10.5\Help\gp</arcToolboxHelpPath>
+		<arcToolboxHelpPath>c:\program files\arcgis\pro\Resources\Help\gp</arcToolboxHelpPath>
 		<toolsets/>
 	</toolbox>
 	<dataIdInfo>

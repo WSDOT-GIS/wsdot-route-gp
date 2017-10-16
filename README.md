@@ -1,4 +1,4 @@
-wsdot.route module
+wsdotroute module
 =================
 
 Python module for locating points or line segments along WSDOT LRS route layers.
@@ -15,7 +15,7 @@ This section will probably no longer be necessary. Delete when we are sure that 
 Running toolbox from ArcCatalog
 -------------------------------
 
-If you want to run the `wsdotroute.pyt` toolbox from ArcCatalog without installing the module (e.g., when you are a developer modifying the code), you will need to do the following to ensure the toolbox can find the `wsdot.route` module.
+If you want to run the `wsdotroute.pyt` toolbox from ArcCatalog without installing the module (e.g., when you are a developer modifying the code), you will need to do the following to ensure the toolbox can find the `wsdotroute` module.
 
 1. Open the Python Window
 2. Type the following in the window (replacing the path given here with the actual path to the `src` folder on your computer)

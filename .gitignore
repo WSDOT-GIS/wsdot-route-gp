@@ -1,7 +1,7 @@
 .vscode
 *.gdb
 pylint.rst
-src/wsdot/route/esri/help/gp/toolboxes/*
+src/wsdotroute/esri/help/gp/toolboxes/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
