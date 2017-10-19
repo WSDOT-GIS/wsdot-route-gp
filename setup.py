@@ -43,5 +43,5 @@ setup(
     keywords="WA Washington WSDOT transportation department state linear referencing route",
     packages=['wsdotroute'],
     package_dir={'wsdotroute': 'src/wsdotroute'},
-    package_data={'wsdotroute': ['esri/toolboxes/*.pyt', 'esri/help/gp/toolboxes/*']}
+    package_data={'wsdotroute': ['esri/toolboxes/*', 'esri/help/gp/toolboxes/*']}
 )
