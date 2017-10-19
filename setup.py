@@ -13,7 +13,7 @@ from os import path
 HERE = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
-with codec_open(path.join(HERE, 'README.md'), encoding='utf-8') as f:
+with codec_open(path.join(HERE, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(

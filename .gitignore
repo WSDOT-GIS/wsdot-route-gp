@@ -1,6 +1,6 @@
 .vscode
 *.gdb
-pylint.rst
+*.rst
 src/wsdotroute/esri/help/gp/toolboxes/*
 
 # Byte-compiled / optimized / DLL files
@@ -102,3 +102,9 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json

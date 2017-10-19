@@ -8,24 +8,6 @@ Compatibility
 
 This toolbox is designed to work with ArcGIS Pro (Python 3.X) as well as ArcMap / ArcCatalog (Python 2.X).
 
-<!--
-
-This section will probably no longer be necessary. Delete when we are sure that is the case.
-
-Running toolbox from ArcCatalog
--------------------------------
-
-If you want to run the `wsdotroute.pyt` toolbox from ArcCatalog without installing the module (e.g., when you are a developer modifying the code), you will need to do the following to ensure the toolbox can find the `wsdotroute` module.
-
-1. Open the Python Window
-2. Type the following in the window (replacing the path given here with the actual path to the `src` folder on your computer)
-    ```python
-    import sys
-    sys.path.append(r'C:\Users\YourUserName\Documents\GitHub\wsdot-route-gp\src')
-    ```
-3. Open the toolbox file
--->
-
 Run Unit Tests
 --------------
 
