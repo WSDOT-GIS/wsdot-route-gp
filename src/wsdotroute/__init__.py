@@ -153,8 +153,6 @@ def create_event_feature_class(event_table,
                                route_layer_route_id_field,
                                begin_measure_field,
                                end_measure_field=None,
-                               route_id_suffix_type=RouteIdSuffixType.has_i_suffix |
-                               RouteIdSuffixType.has_d_suffix,
                                out_fc=None):
     """Creates a feature class by locating events along a route layer.
 
@@ -167,8 +165,6 @@ def create_event_feature_class(event_table,
         end_measure_field: Optional. Name of numeric field in event_table that contains end measure
             value. If omitted, begin_measure_field will be interpereted as a point along a line
             instead of a line segment.
-        route_id_suffix_type: Optional. Indicates what format the route_layer's route IDs are in.
-            See the RouteIdSuffixType values.
         out_fc: str, path to output feature class. If omitted, and in_memory FC will be created
 
     Returns:
@@ -198,10 +194,18 @@ def create_event_feature_class(event_table,
     # Create the output feature class.
     workspace, fc_name = split_path(out_fc)
     routes_desc = Describe(route_layer)
-    # arcpy.management.CreateFeatureclass(workspace, fc_name, out_geo_type, None, "ENABLED",
-    #                                     "DISABLED", routes_desc.spatialReference)
+
+    # Get the spatial reference from the route layer description.
+    # The method for accessing it will differ in ArcGIS Desktop
+    # and ArcGIS Pro.
+    spatial_reference = None
+    if isinstance(routes_desc, dict):
+        spatial_reference = routes_desc["spatialReference"]
+    else:
+        spatial_reference = routes_desc.spatialReference
+
     arcpy.management.CreateFeatureclass(workspace, fc_name, out_geo_type,
-                                        spatial_reference=routes_desc.spatialReference)
+                                        spatial_reference=spatial_reference)
     event_oid_field_name = "EventOid"
     error_field_name = "Error"
     arcpy.management.AddField(out_fc, event_oid_field_name, "LONG", field_alias="Event OID",
@@ -221,17 +225,8 @@ def create_event_feature_class(event_table,
                 else:
                     end_m = None
 
-                try:
-                    std_route_id = standardize_route_id(
-                        event_route_id, route_id_suffix_type)
-                except ValueError as ex:
-                    msg = "Invalid route ID at OID %d: %s" % (
-                        event_oid, event_route_id)
-                    insert_cursor.insertRow((event_oid, None, msg))
-                    continue
-
                 where = "%s = '%s'" % (
-                    route_layer_route_id_field, std_route_id)
+                    route_layer_route_id_field, event_route_id)
                 out_geom = None
                 error = None
                 with arcpy.da.SearchCursor(route_layer, "SHAPE@", where) as route_cursor:
@@ -247,7 +242,7 @@ def create_event_feature_class(event_table,
                         except arcpy.ExecuteError as ex:
                             error = ex
                             arcpy.AddWarning("Error finding event on route: %s @ %s.\n%s" % (
-                                std_route_id, (begin_m, end_m), ex))
+                                event_route_id, (begin_m, end_m), ex))
                         # If out geometry has been found, no need to try with other
                         # route features. (There should be only one route feature,
                         # anyway.)
@@ -258,7 +253,7 @@ def create_event_feature_class(event_table,
                     insert_cursor.insertRow((event_oid, None, str(error)))
                 elif out_geom is None:
                     msg = "Could not locate %s on %s (%s)." % (
-                        (begin_m, end_m), std_route_id, event_route_id)
+                        (begin_m, end_m), event_route_id, event_route_id)
                     insert_cursor.insertRow((event_oid, None, msg))
                     arcpy.AddWarning(msg)
                 else:
@@ -407,6 +402,7 @@ def update_route_location(
                             m1 = round(m1, rounding_digits)
                         if m2:
                             m2 = round(m2, rounding_digits)
+                    # Geometry should not change, so no need to update it.
                     # row[1] = updated_geometry
                     row[2] = None
                     row[3] = m1

@@ -26,10 +26,14 @@ class TestAddField(unittest.TestCase):
             # Create sample table
             workspace, table_name = split(table_path)
             arcpy.management.CreateTable(workspace, table_name)
-            arcpy.management.AddFields(table_path, [
-                [field_names[0], "TEXT", None, 11],
-                [field_names[1], "TEXT", None, None]
-            ])
+            try:
+                arcpy.management.AddFields(table_path, [
+                    [field_names[0], "TEXT", None, 11],
+                    [field_names[1], "TEXT", None, None]
+                ])
+            except AttributeError:
+                arcpy.management.AddField(table_path, field_names[0], "TEXT", field_length=11)
+                arcpy.management.AddField(table_path, field_names[1], "TEXT")
 
             # Call funciton to add field
             add_standardized_route_id_field(

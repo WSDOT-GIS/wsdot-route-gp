@@ -40,8 +40,8 @@ class TestWsdotRoute(unittest.TestCase):
         out_fc = arcpy.CreateScratchName(
             "output", data_type="Feature Class", workspace=workspace)
         data_rows = (
-            ("005", 0, 5),
-            ("I-5", 20, 100)
+            ("005i", 0, 5),
+            ("005i", 20, 100)
         )
         try:
             arcpy.management.CreateTable(*os.path.split(table_path))

@@ -78,8 +78,7 @@ class _LocateRouteEventsOrds(object):
     route_layer_route_id_field = 3
     begin_measure_field = 4
     end_measure_field = 5
-    route_id_suffix = 6
-    out_fc = 7
+    out_fc = 6
 
 
 class Toolbox(object):
@@ -237,14 +236,6 @@ class LocateRouteEvents(object):
         end_measure_field_param.parameterDependencies = [
             event_table_param.name]
 
-        route_id_suffix_param = arcpy.Parameter(
-            "route_id_suffix_type", "Route ID suffix type", "Input",
-            "GPString", "Required"
-        )
-        route_id_suffix_param.filter.type = "ValueList"
-        route_id_suffix_param.filter.list = ["NONE", "D_ONLY", "I_ONLY", "ALL"]
-        route_id_suffix_param.value = "ALL"
-
         out_fc_param = arcpy.Parameter(
             "out_fc", "Output Feature Class", "Output", "DEFeatureClass", "Required"
         )
@@ -271,7 +262,6 @@ class LocateRouteEvents(object):
             route_layer_route_id_field_param,
             begin_measure_field_param,
             end_measure_field_param,
-            route_id_suffix_param,
             out_fc_param
         ]
         return params
@@ -363,20 +353,23 @@ class LocateRouteEvents(object):
 
     def execute(self, parameters, messages):
         '''The source code of the tool.'''
-        event_table = parameters[0].valueAsText
-        route_layer = parameters[1].valueAsText
-        event_table_route_id_field = parameters[2].valueAsText
-        route_layer_route_id_field = parameters[3].valueAsText
-        begin_measure_field = parameters[4].valueAsText
-        end_measure_field = parameters[5].valueAsText
+        # Get parameter values
+        (
+            event_table,
+            route_layer,
+            event_table_route_id_field,
+            route_layer_route_id_field,
+            begin_measure_field,
+            end_measure_field,
+            out_fc
+        ) = map(lambda p: p.valueAsText, parameters)
+
         if end_measure_field == "#":
             end_measure_field = None
 
-        route_id_suffix = _suffix_dict[parameters[6].valueAsText]
-        out_fc = parameters[7].valueAsText
         create_event_feature_class(event_table, route_layer, event_table_route_id_field,
                                    route_layer_route_id_field, begin_measure_field,
-                                   end_measure_field, route_id_suffix, out_fc)
+                                   end_measure_field, out_fc)
         return
 
 
