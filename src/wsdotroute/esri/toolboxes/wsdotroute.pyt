@@ -226,14 +226,14 @@ class LocateRouteEvents(object):
         begin_measure_field_param = arcpy.Parameter(
             "begin_m_field", "Begin Measure Field", "Input", "Field", "Required"
         )
-        begin_measure_field_param.filter.list = ['Double', 'Single']
+        begin_measure_field_param.filter.list = ['Float', 'Double', 'Single']
         begin_measure_field_param.parameterDependencies = [
             event_table_param.name]
 
         end_measure_field_param = arcpy.Parameter(
             "end_m_field", "End Measure Field", "Input", "Field", "Optional"
         )
-        end_measure_field_param.filter.list = ['Double', 'Single']
+        end_measure_field_param.filter.list = ['Float', 'Double', 'Single']
         end_measure_field_param.parameterDependencies = [
             event_table_param.name]
 
