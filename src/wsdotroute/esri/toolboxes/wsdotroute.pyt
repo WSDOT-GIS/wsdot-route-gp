@@ -129,6 +129,11 @@ class AddDirectionedRouteIdField(object):
         out_route_id_suffix_type_param.filter.list = [
             "D_ONLY", "I_ONLY", "ALL"]
         out_route_id_suffix_type_param.value = "ALL"
+
+        wsdot_validate_param = arcpy.Parameter(
+            "wsdot_validate", "Perform WSDOT Route ID validation?", "Input", "Boolean", "Optional")
+        wsdot_validate_param.value = True
+
         out_table_param = arcpy.Parameter("out_table", "Output Table", "Output",
                                           "DETable", "Derived")
         out_table_param.parameterDependencies = [table_param.name]
@@ -141,6 +146,7 @@ class AddDirectionedRouteIdField(object):
             out_route_id_field_name_param,
             out_error_field_name_param,
             out_route_id_suffix_type_param,
+            wsdot_validate_param,
             out_table_param
         ]
 
@@ -177,15 +183,17 @@ class AddDirectionedRouteIdField(object):
 
     def execute(self, parameters, messages):
         '''The source code of the tool.'''
-        table = parameters[0].valueAsText
-        route_id_field = parameters[1].valueAsText
-        direction_field = parameters[2].valueAsText
-        out_route_id_field = parameters[3].valueAsText
-        out_error_field = parameters[4].valueAsText
+        # Get the text values of these parameters and assign to variables.
+        # Do this for all but the last two parameters, which will be handled
+        # differently.
+        table, route_id_field, direction_field, out_route_id_field, out_error_field = map(
+            lambda p: p.valueAsText, parameters[:5])
+
         out_route_id_suffix_type = _suffix_dict[parameters[5].valueAsText]
+        wsdot_validate = parameters[6].value
 
         add_standardized_route_id_field(
-            table, route_id_field, direction_field, out_route_id_field, out_error_field, out_route_id_suffix_type)
+            table, route_id_field, direction_field, out_route_id_field, out_error_field, out_route_id_suffix_type, wsdot_validate)
 
         return
 

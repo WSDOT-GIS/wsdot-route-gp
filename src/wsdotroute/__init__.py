@@ -86,7 +86,7 @@ def standardize_route_id(route_id, route_id_suffix_type=RouteIdSuffixType.has_bo
         return unsuffixed_rid
 
 
-def add_standardized_route_id_field(in_table, route_id_field, direction_field, out_field_name, out_error_field_name, route_id_suffix_type):
+def add_standardized_route_id_field(in_table, route_id_field, direction_field, out_field_name, out_error_field_name, route_id_suffix_type, wsdot_validation=True):
     """Adds route ID + direction field to event table that has both unsuffixed route ID and direction fields.
     """
     # Make sure an output route ID suffix type other than "unsuffixed" has been specified.
@@ -94,12 +94,16 @@ def add_standardized_route_id_field(in_table, route_id_field, direction_field, o
         raise ValueError("Invalid route ID suffix type: %s" %
                          route_id_suffix_type)
 
-    # Determine the length of the output route ID field based on route suffix type
-    out_field_length = 11
-    if route_id_suffix_type == RouteIdSuffixType.has_i_suffix or route_id_suffix_type == RouteIdSuffixType.has_d_suffix:
-        out_field_length += 1
-    elif route_id_suffix_type == RouteIdSuffixType.has_both_i_and_d:
-        out_field_length += 2
+    if wsdot_validation:
+        # Determine the length of the output route ID field based on route suffix type
+        out_field_length = 11
+        if route_id_suffix_type == RouteIdSuffixType.has_i_suffix or route_id_suffix_type == RouteIdSuffixType.has_d_suffix:
+            out_field_length += 1
+        elif route_id_suffix_type == RouteIdSuffixType.has_both_i_and_d:
+            out_field_length += 2
+    else:
+        # TODO: Get field length from arcpy.ListFields(in_table) using route_id_field's length + 2.
+        out_field_length = None
 
     # Add new fields to the output table.
     if "AddFields" in dir(arcpy.management):
@@ -123,8 +127,9 @@ def add_standardized_route_id_field(in_table, route_id_field, direction_field, o
             if rid:
                 # Get unsuffixed, standardized route ID.
                 try:
-                    rid = standardize_route_id(
-                        rid, RouteIdSuffixType.has_no_suffix)
+                    if wsdot_validation:
+                        rid = standardize_route_id(
+                            rid, RouteIdSuffixType.has_no_suffix)
                 except ValueError as error:
                     row[3] = "%s" % error
                 else:
