@@ -297,6 +297,7 @@ def field_list_contains(fields, name, type_re=re.compile(r"^(?:(?:String)|(?:Tex
             break
     return field_exists, correct_type
 
+
 def get_measures(in_geometry, route_geometry):
     """Finds the nearest point or route segement along a route polyline.
 
@@ -319,13 +320,15 @@ def get_measures(in_geometry, route_geometry):
         out_geometry = route_geometry.snapToLine(in_geometry.firstPoint)
         m1 = out_geometry.firstPoint.M
     elif isinstance(in_geometry, arcpy.Polyline):
-        p1, p2 = map(route_geometry.snapToLine, (in_geometry.firstPoint, in_geometry.lastPoint))
+        p1, p2 = map(route_geometry.snapToLine,
+                     (in_geometry.firstPoint, in_geometry.lastPoint))
         m1 = p1.firstPoint.M
         m2 = p2.firstPoint.M
         out_geometry = route_geometry.segmentAlongLine(m1, m2)
     else:
         raise TypeError("Invalid geometry type")
     return out_geometry, m1, m2
+
 
 def update_route_location(
         in_features,
@@ -379,7 +382,8 @@ def update_route_location(
         arcpy.AddWarning(
             "Field '%s' already exists and its data will be overwritten." % out_error_field)
 
-    update_fields = [in_features_route_id_field, "SHAPE@", out_error_field, measure_field]
+    update_fields = [in_features_route_id_field,
+                     "SHAPE@", out_error_field, measure_field]
     if end_measure_field:
         update_fields.append(end_measure_field)
 
@@ -393,7 +397,6 @@ def update_route_location(
         for row in update_cursor:
             in_route_id, event_geometry = row[:2]
 
-
             if not event_geometry:
                 row[2] = "Event geometry is NULL."
                 continue
@@ -402,7 +405,8 @@ def update_route_location(
                 route_geometry = None
                 for route_row in route_cursor:
                     route_geometry = route_row[0]
-                    updated_geometry, m1, m2 = get_measures(event_geometry, route_geometry)
+                    updated_geometry, m1, m2 = get_measures(
+                        event_geometry, route_geometry)
                     if rounding_digits is not None:
                         if m1:
                             m1 = round(m1, rounding_digits)
@@ -421,22 +425,28 @@ def update_route_location(
             update_cursor.updateRow(row)
 
     if error_count:
-        arcpy.AddWarning("Unable to locate %d out of %d events." % (error_count, feature_count))
+        arcpy.AddWarning("Unable to locate %d out of %d events." %
+                         (error_count, feature_count))
+
 
 def create_segment_id_table(input_point_features):
     """Creates a numpy structured array for use with the arcpy.ExtendTable function.
-    Output array will have the following fields:
-
-    foreign_oid: Corresponds to the "OID@" field of the input_point_features table.
-    segment_id: Indicates which point features of input_point_features go together to define the
-                begin and end points of a line segement.
 
     Parameters:
         input_point_features: Path to a point feature class.
+
+    Returns:
+        A numpy structured array with the following fields:
+            foreign_oid:  Corresponds to the "OID@" field of the input_point_features table.
+            segment_id:   Indicates which point features of input_point_features go together to define the
+                          begin and end points of a line segement.
+            is_end_point: Will have value of 1 if the the row represents an end point, 0 for a
+                          begin point.
     """
     row_count = int(arcpy.GetCount_management(input_point_features)[0])
     if row_count % 2 != 0:
-        raise ValueError("Input feature class should have an even number of features.")
+        raise ValueError(
+            "Input feature class should have an even number of features.")
 
     output_list = []
 
@@ -445,8 +455,60 @@ def create_segment_id_table(input_point_features):
         segment_id = -1
         for row in cursor:
             i += 1
+            is_end_point = False
             if i % 2 == 0:
                 segment_id += 1
-            output_list.append([row[0], segment_id])
+            else:
+                is_end_point = True
+            output_list.append((row[0], segment_id, int(is_end_point)))
 
-    return numpy.array(output_list, dtype=[("foreign_oid", numpy.int32), ("segment_id", numpy.int32)])
+    return numpy.array(
+        output_list,
+        dtype=[
+            ("foreign_oid", numpy.int32),
+            ("segment_id", numpy.int32),
+            ("is_end_point", numpy.int32)
+        ]
+
+    )
+
+
+def points_to_line_events(
+        in_features, in_routes, route_id_field, radius, out_table,
+        # out_event_properties="RID LINE M1 M2",
+        # zero_length_events="ZERO",
+        # in_fields="FIELDS",
+        m_directional_offsetting="M_DIRECTION"):
+    """Using a point feature layer to represent begin and end points, finds nearest
+    route event points.
+    For parameter explanations, see http://pro.arcgis.com/en/pro-app/tool-reference/linear-referencing/locate-features-along-routes.htm
+    """
+
+    # Determine the segment IDs and store in Numpy structured array.
+    segment_id_array = create_segment_id_table(in_features)
+
+    # Copy input features to new temporary feature class.
+    in_features_copy = arcpy.CreateScratchName(workspace=arcpy.env.scratchGDB)
+
+    try:
+        arcpy.management.CopyFeatures(in_features, in_features_copy)
+
+        # Get the OID field of the input table.
+        oid_field = arcpy.ListFields(in_features_copy, field_type="OID")[0]
+
+        # Add the segment IDs from the numpy array to the copy of the input features.
+        arcpy.da.ExtendTable(in_features_copy, oid_field.name,
+                             segment_id_array, "foreign_oid", True)
+    finally:
+        # Remove the numpy array from memory
+        del segment_id_array
+
+    output_result = None
+    try:
+        output_result = arcpy.lr.LocateFeaturesAlongRoutes(
+            in_features_copy, in_routes, route_id_field, radius, out_table, "RID POINT MEAS",
+            "ALL", "DISTANCE", in_fields="FIELDS", m_direction_offsetting=m_directional_offsetting)
+    finally:
+        arcpy.management.Delete(in_features_copy)
+
+    return output_result
