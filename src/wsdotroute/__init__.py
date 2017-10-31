@@ -170,7 +170,7 @@ def create_event_feature_class(event_table,
         end_measure_field: Optional. Name of numeric field in event_table that contains end measure
             value. If omitted, begin_measure_field will be interpereted as a point along a line
             instead of a line segment.
-        out_fc: str, path to output feature class. If omitted, and in_memory FC will be created
+        out_fc: str, path to output feature class. If omitted, an in_memory FC will be created
 
     Returns:
         Returns the path to the output feature class.
