@@ -5,6 +5,7 @@ from __future__ import (unicode_literals, print_function, division,
 
 import re
 from os.path import split as split_path, join as join_path
+import numpy
 import arcpy
 try:
     from arcpy.da import Describe
@@ -421,3 +422,31 @@ def update_route_location(
 
     if error_count:
         arcpy.AddWarning("Unable to locate %d out of %d events." % (error_count, feature_count))
+
+def create_segment_id_table(input_point_features):
+    """Creates a numpy structured array for use with the arcpy.ExtendTable function.
+    Output array will have the following fields:
+
+    foreign_oid: Corresponds to the "OID@" field of the input_point_features table.
+    segment_id: Indicates which point features of input_point_features go together to define the
+                begin and end points of a line segement.
+
+    Parameters:
+        input_point_features: Path to a point feature class.
+    """
+    row_count = int(arcpy.GetCount_management(input_point_features)[0])
+    if row_count % 2 != 0:
+        raise ValueError("Input feature class should have an even number of features.")
+
+    output_list = []
+
+    with arcpy.da.SearchCursor(input_point_features, "OID@") as cursor:
+        i = -1
+        segment_id = -1
+        for row in cursor:
+            i += 1
+            if i % 2 == 0:
+                segment_id += 1
+            output_list.append([row[0], segment_id])
+
+    return numpy.array(output_list, dtype=[("foreign_oid", numpy.int32), ("segment_id", numpy.int32)])
