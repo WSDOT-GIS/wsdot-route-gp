@@ -5,7 +5,6 @@ from __future__ import (unicode_literals, print_function, division,
 
 import re
 from os.path import split as split_path, join as join_path
-import numpy
 import arcpy
 try:
     from arcpy.da import Describe
@@ -429,30 +428,33 @@ def update_route_location(
                          (error_count, feature_count))
 
 
-def create_segment_id_table(input_point_features):
-    """Creates a numpy structured array for use with the arcpy.ExtendTable function.
+def copy_with_segment_ids(input_point_features, out_feature_class):
+    """Copies point feature classes and adds SegmentID and IsEndPoint fields.
 
     Parameters:
         input_point_features: Path to a point feature class.
-
+        out_feature_class: Path where output feature class will be written. This feature class
+        will contain the following extra fields:
+            SegmentId:  Indicates which point features of input_point_features go together to define the
+                        begin and end points of a line segement.
+            IsEndPoint: Will have value of 1 if the the row represents an end point, 0 for a
+                        begin point.
     Returns:
-        A numpy structured array with the following fields:
-            foreign_oid:  Corresponds to the "OID@" field of the input_point_features table.
-            segment_id:   Indicates which point features of input_point_features go together to define the
-                          begin and end points of a line segement.
-            is_end_point: Will have value of 1 if the the row represents an end point, 0 for a
-                          begin point.
+        Returns a tuple: total number of rows (r), number of segments (s).
+        s = r / 2
     """
     row_count = int(arcpy.GetCount_management(input_point_features)[0])
     if row_count % 2 != 0:
         raise ValueError(
             "Input feature class should have an even number of features.")
 
-    output_list = []
+    arcpy.management.CopyFeatures(input_point_features, out_feature_class)
+    arcpy.management.AddField(out_feature_class, "SegmentId", "LONG", field_alias="Segement ID")
+    arcpy.management.AddField(out_feature_class, "IsEndPoint", "SHORT", field_alias="Is end point")
 
-    with arcpy.da.SearchCursor(input_point_features, "OID@") as cursor:
-        i = -1
-        segment_id = -1
+    i = -1
+    segment_id = -1
+    with arcpy.da.UpdateCursor(out_feature_class, ("SegmentId", "IsEndPoint")) as cursor:
         for row in cursor:
             i += 1
             is_end_point = False
@@ -460,17 +462,9 @@ def create_segment_id_table(input_point_features):
                 segment_id += 1
             else:
                 is_end_point = True
-            output_list.append((row[0], segment_id, int(is_end_point)))
+            cursor.updateRow([segment_id, int(is_end_point)])
 
-    return numpy.array(
-        output_list,
-        dtype=[
-            ("foreign_oid", numpy.int32),
-            ("segment_id", numpy.int32),
-            ("is_end_point", numpy.int32)
-        ]
-
-    )
+    return i + 1, segment_id + 1
 
 
 def points_to_line_events(
@@ -478,36 +472,23 @@ def points_to_line_events(
         # out_event_properties="RID LINE M1 M2",
         # zero_length_events="ZERO",
         # in_fields="FIELDS",
-        m_directional_offsetting="M_DIRECTION"):
+        #m_directional_offsetting="M_DIRECTION"
+    ):
     """Using a point feature layer to represent begin and end points, finds nearest
     route event points.
     For parameter explanations, see http://pro.arcgis.com/en/pro-app/tool-reference/linear-referencing/locate-features-along-routes.htm
     """
-
-    # Determine the segment IDs and store in Numpy structured array.
-    segment_id_array = create_segment_id_table(in_features)
-
     # Copy input features to new temporary feature class.
     in_features_copy = arcpy.CreateScratchName(workspace=arcpy.env.scratchGDB)
 
-    try:
-        arcpy.management.CopyFeatures(in_features, in_features_copy)
-
-        # Get the OID field of the input table.
-        oid_field = arcpy.ListFields(in_features_copy, field_type="OID")[0]
-
-        # Add the segment IDs from the numpy array to the copy of the input features.
-        arcpy.da.ExtendTable(in_features_copy, oid_field.name,
-                             segment_id_array, "foreign_oid", True)
-    finally:
-        # Remove the numpy array from memory
-        del segment_id_array
+    # Determine the segment IDs and store in Numpy structured array.
+    copy_with_segment_ids(in_features, in_features_copy)
 
     output_result = None
     try:
         output_result = arcpy.lr.LocateFeaturesAlongRoutes(
             in_features_copy, in_routes, route_id_field, radius, out_table, "RID POINT MEAS",
-            "ALL", "DISTANCE", in_fields="FIELDS", m_direction_offsetting=m_directional_offsetting)
+            "ALL", "DISTANCE", in_fields="FIELDS")
     finally:
         arcpy.management.Delete(in_features_copy)
 
