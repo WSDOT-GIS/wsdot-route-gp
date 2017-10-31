@@ -29,7 +29,7 @@ def standardize_route_id(route_id, route_id_suffix_type=RouteIdSuffixType.has_bo
     Args:
         route_id: Route ID string from event table.
         route_id_suffix_type: Optional. Indicates what format the route_layer's route IDs are in.
-            See the RouteIdSuffixType values. Defaults to RouteIdSUffixType.has_both_i_and_d.
+            See the RouteIdSuffixType values. Defaults to RouteIdSuffixType.has_both_i_and_d.
 
     Returns:
         str: equivalent of the input route id in the output format.
