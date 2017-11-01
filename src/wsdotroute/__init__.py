@@ -429,7 +429,7 @@ def update_route_location(
 
 
 def copy_with_segment_ids(input_point_features, out_feature_class):
-    """Copies point feature classes and adds SegmentID and IsEndPoint fields.
+    """Copies point feature classes and adds SegmentID and IsEndPoint fields to the copy.
 
     Parameters:
         input_point_features: Path to a point feature class.
@@ -467,29 +467,57 @@ def copy_with_segment_ids(input_point_features, out_feature_class):
     return i + 1, segment_id + 1
 
 
-def points_to_line_events(
-        in_features, in_routes, route_id_field, radius, out_table,
-        # out_event_properties="RID LINE M1 M2",
-        # zero_length_events="ZERO",
-        # in_fields="FIELDS",
-        #m_directional_offsetting="M_DIRECTION"
-    ):
+def points_to_line_events(in_features, in_routes, route_id_field, radius, out_table):
     """Using a point feature layer to represent begin and end points, finds nearest
     route event points.
     For parameter explanations, see http://pro.arcgis.com/en/pro-app/tool-reference/linear-referencing/locate-features-along-routes.htm
     """
     # Copy input features to new temporary feature class.
-    in_features_copy = arcpy.CreateScratchName(workspace=arcpy.env.scratchGDB)
+    in_features_copy = arcpy.CreateScratchName(workspace="in_memory")
 
     # Determine the segment IDs and store in Numpy structured array.
     copy_with_segment_ids(in_features, in_features_copy)
 
-    output_result = None
+    temp_events_table = arcpy.CreateScratchName("AllEvents", workspace="in_memory")
+
     try:
-        output_result = arcpy.lr.LocateFeaturesAlongRoutes(
-            in_features_copy, in_routes, route_id_field, radius, out_table, "RID POINT MEAS",
-            "ALL", "DISTANCE", in_fields="FIELDS")
+        arcpy.lr.LocateFeaturesAlongRoutes(
+            in_features_copy, in_routes, route_id_field, radius, temp_events_table,
+            "RID POINT MEAS", "ALL", "DISTANCE", in_fields="FIELDS")
     finally:
         arcpy.management.Delete(in_features_copy)
 
-    return output_result
+    # Create layer name, removing the workspace part from the generated output.
+    events_layer = split_path(arcpy.CreateUniqueName("point_events", "in_memory"))[1]
+    end_events_table = arcpy.CreateScratchName("End", "PointEvents", workspace="in_memory")
+
+    try:
+        # Select start point events, copy to new table.
+        # Then switch the selection and copy the end point events to a new table.
+        arcpy.management.MakeTableView(temp_events_table, events_layer, None, "in_memory")
+
+        arcpy.management.SelectLayerByAttribute(events_layer, "NEW_SELECTION", "IsEndPoint = 0")
+
+
+        # copy selection to output table
+        arcpy.management.CopyRows(events_layer, out_table)
+
+        arcpy.management.SelectLayerByAttribute(events_layer, "SWITCH_SELECTION")
+
+        # copy selection to new temp table
+        arcpy.management.CopyRows(events_layer, end_events_table)
+
+        # Alter the field names in the end point events table
+        for field_name in ("RID", "MEAS", "Distance"):
+            new_name = "End%s" % field_name
+            arcpy.management.AlterField(end_events_table, field_name, new_name)
+
+        # Join the temp table end point data to the output table containg the begin point events.
+        arcpy.management.JoinField(out_table, "SegmentId", end_events_table, "SegmentId", ["EndRID", "EndMEAS", "EndDistance"])
+    finally:
+        for table in (events_layer, temp_events_table, end_events_table):
+            if table and arcpy.Exists(table):
+                arcpy.AddMessage("Deleting %s..." % table)
+                arcpy.management.Delete(table)
+
+    return out_table
