@@ -11,6 +11,8 @@ try:
 except ImportError:
     from arcpy import Describe
 
+def _get_row_count(view):
+    return int(arcpy.management.GetCount(view)[0])
 
 class RouteIdSuffixType(object):
     """Specifies valid route ID suffix types.
@@ -448,10 +450,13 @@ def copy_with_segment_ids(input_point_features, out_feature_class):
         raise ValueError(
             "Input feature class should have an even number of features.")
 
+    arcpy.AddMessage("Copying %s to %s..." % (input_point_features, out_feature_class))
     arcpy.management.CopyFeatures(input_point_features, out_feature_class)
+    arcpy.AddMessage("Adding fields %s to %s" % (("SegmentId", "IsEndPoint"), out_feature_class))
     arcpy.management.AddField(out_feature_class, "SegmentId", "LONG", field_alias="Segement ID")
     arcpy.management.AddField(out_feature_class, "IsEndPoint", "SHORT", field_alias="Is end point")
 
+    arcpy.AddMessage("Calculating SegmentIDs and determining start and end points.")
     i = -1
     segment_id = -1
     with arcpy.da.UpdateCursor(out_feature_class, ("SegmentId", "IsEndPoint")) as cursor:
@@ -481,10 +486,12 @@ def points_to_line_events(in_features, in_routes, route_id_field, radius, out_ta
     temp_events_table = arcpy.CreateScratchName("AllEvents", workspace="in_memory")
 
     try:
+        arcpy.AddMessage("Locating fields along routes...")
         arcpy.lr.LocateFeaturesAlongRoutes(
             in_features_copy, in_routes, route_id_field, radius, temp_events_table,
             "RID POINT MEAS", "ALL", "DISTANCE", in_fields="FIELDS")
     finally:
+        arcpy.AddMessage("Deleting %s" % in_features_copy)
         arcpy.management.Delete(in_features_copy)
 
     # Create layer name, removing the workspace part from the generated output.
@@ -514,10 +521,54 @@ def points_to_line_events(in_features, in_routes, route_id_field, radius, out_ta
 
         # Join the temp table end point data to the output table containg the begin point events.
         arcpy.management.JoinField(out_table, "SegmentId", end_events_table, "SegmentId", ["EndRID", "EndMEAS", "EndDistance"])
+
     finally:
         for table in (events_layer, temp_events_table, end_events_table):
             if table and arcpy.Exists(table):
                 arcpy.AddMessage("Deleting %s..." % table)
                 arcpy.management.Delete(table)
+
+
+    # Get a list of OIDs that need to be deleted.
+    oids_to_be_deleted = []
+    with arcpy.da.SearchCursor(out_table, ["OID@", "RID", "EndRID"]) as cursor:
+        for row in cursor:
+            oid, rid1, rid2 = row
+            if rid1 != rid2:
+                oids_to_be_deleted.append(oid)
+
+    drop_end_rid_field = True
+
+    # Delete rows from the output table where the start and end route IDs do not match
+    if oids_to_be_deleted:
+        try:
+            events_layer = split_path(arcpy.CreateScratchName("OutputEvents", workspace="in_memory"))[1]
+            arcpy.AddMessage("Rows with the following OIDs should be deleted: %s" % oids_to_be_deleted)
+            arcpy.AddMessage("Creating view %s on %s" % (events_layer, out_table))
+            arcpy.management.MakeTableView(out_table, events_layer)
+            # arcpy.management.SelectLayerByAttribute(events_layer, "NEW_SELECTION", "RID <> EndRID")
+            # Get OID field name
+
+            oid_field = arcpy.ListFields(out_table, field_type="OID")[0]
+            oid_list = ",".join(map(str, oids_to_be_deleted))
+            arcpy.management.SelectLayerByAttribute(events_layer, "NEW_SELECTION", "%s in (%s)" % (oid_field.name, oid_list))
+
+            selected_row_count = _get_row_count(events_layer)
+            drop_end_rid_field = True
+            if selected_row_count:
+                total_rows_before_delete = _get_row_count(out_table)
+                arcpy.AddMessage("There are %d rows where the start and end RIDs do not match. Deleting these rows..." % total_rows_before_delete)
+                arcpy.management.DeleteRows(events_layer)
+                rows_after_delete = _get_row_count(out_table)
+                if rows_after_delete >= total_rows_before_delete:
+                    arcpy.AddWarning("%d rows were selected for deletion, but no rows were deleted." % total_rows_before_delete)
+                    drop_end_rid_field = False
+            else:
+                arcpy.AddMessage("Zero rows were selected for deletion")
+        finally:
+            arcpy.management.Delete(events_layer)
+
+    if drop_end_rid_field:
+        arcpy.DeleteField_management(out_table, "EndRID")
 
     return out_table
