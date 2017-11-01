@@ -557,11 +557,11 @@ def points_to_line_events(in_features, in_routes, route_id_field, radius, out_ta
             drop_end_rid_field = True
             if selected_row_count:
                 total_rows_before_delete = _get_row_count(out_table)
-                arcpy.AddMessage("There are %d rows where the start and end RIDs do not match. Deleting these rows..." % total_rows_before_delete)
+                arcpy.AddMessage("There are %d rows where the start and end RIDs do not match. Deleting these rows..." % selected_row_count)
                 arcpy.management.DeleteRows(events_layer)
                 rows_after_delete = _get_row_count(out_table)
                 if rows_after_delete >= total_rows_before_delete:
-                    arcpy.AddWarning("%d rows were selected for deletion, but no rows were deleted." % total_rows_before_delete)
+                    arcpy.AddWarning("%d rows were selected for deletion, but no rows were deleted." % selected_row_count)
                     drop_end_rid_field = False
             else:
                 arcpy.AddMessage("Zero rows were selected for deletion")
@@ -569,6 +569,10 @@ def points_to_line_events(in_features, in_routes, route_id_field, radius, out_ta
             arcpy.management.Delete(events_layer)
 
     if drop_end_rid_field:
-        arcpy.DeleteField_management(out_table, "EndRID")
+        for field in ("EndRID", "SegmentID", "IsEndPoint"):
+            try:
+                arcpy.DeleteField_management(out_table, field)
+            except arcpy.ExecuteError as ex:
+                arcpy.AddWarning("Could not delete field %s from %s.\n%s" % (field, out_table, ex))
 
     return out_table

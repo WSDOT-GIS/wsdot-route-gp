@@ -483,9 +483,14 @@ class PointsToLineEvents(object):
 
     def getParameterInfo(self):
         '''Define parameter definitions'''
+        # in_features_param = arcpy.Parameter(
+        #     'in_features', "Input Features", "Input", "GPFeatureRecordSetLayer", "Required")
+        # in_features_param.value = join_path(dirname(__file__), "PointFeaturesTemplate.lyr")
+
         in_features_param = arcpy.Parameter(
-            'in_features', "Input Features", "Input", "GPFeatureRecordSetLayer", "Required")
-        in_features_param.value = join_path(dirname(__file__), "PointFeaturesTemplate.lyr")
+            'in_features', "Input Features", "Input", "GPFeatureLayer", "Required")
+        in_features_param.filter.list = ["Point"]
+
 
         in_routes_param = arcpy.Parameter(
             "in_routes", "Route Layer", "Input", "GPFeatureLayer", "Required")

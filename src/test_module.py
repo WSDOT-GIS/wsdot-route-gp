@@ -23,8 +23,7 @@ class ModuleTest(unittest.TestCase):
         samples_path = os.path.join(os.path.dirname(__file__), "../Samples")
         input_layer = os.path.join(samples_path, "CrabBeginAndEndPoints.lyr")
         routes_layer = os.path.join(samples_path, "CrabRoutes.lyr")
-        # out_table = arcpy.CreateScratchName(workspace="in_memory")
-        out_table = arcpy.CreateUniqueName("line_events_from_points", os.path.join(samples_path, "Sample.gdb"))
+        out_table = arcpy.CreateScratchName(workspace="in_memory")
         points_to_line_events(input_layer, routes_layer, "RouteID", "50 FEET", out_table)
 
 if __name__ == '__main__':
