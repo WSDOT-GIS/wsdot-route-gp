@@ -4,18 +4,31 @@
 from __future__ import print_function, division, unicode_literals, absolute_import
 import unittest
 import os
+
+# arcpy is only available as part of the ArcGIS software and is not via pip
+# or other package managers.
+
 try:
     import arcpy
 except ImportError:
+    # If arcpy cannot be imported, create an arcpy parameter
+    # and set it to None. In tests requiring arcpy, check
+    # to see if arcpy is truthy, and if it isn't, skip the test.
     arcpy = None
 else:
     from wsdotroute import (add_standardized_route_id_field,
                             copy_with_segment_ids,
-                            points_to_line_events, RouteIdSuffixType,
-                            standardize_route_id)
+                            points_to_line_events)
+from wsdotroute import standardize_route_id, RouteIdSuffixType
 
 
 class ModuleTest(unittest.TestCase):
+    def skip_if_no_arcpy(self):
+        if not arcpy:
+            self.skipTest("arcpy module not installed.")
+            return True
+        else:
+            return False
     def test_route_id_parsing(self):
         in_id = "I-5"
         expected_out = "005i"
@@ -26,6 +39,9 @@ class ModuleTest(unittest.TestCase):
         actual_out = standardize_route_id(in_id)
         self.assertEqual(expected_out, actual_out)
     def test_create_segment_id_table(self):
+        if self.skip_if_no_arcpy():
+            return
+
         samples_path = os.path.join(os.path.dirname(__file__), "../Samples")
         input_layer = os.path.join(samples_path, "CrabBeginAndEndPoints.lyr")
         output_fc = arcpy.CreateScratchName(workspace="in_memory")
@@ -37,8 +53,7 @@ class ModuleTest(unittest.TestCase):
             arcpy.management.Delete(output_fc)
 
     def test_points_to_line_events(self):
-        if not arcpy:
-            self.skipTest("arcpy module not installed.")
+        if self.skip_if_no_arcpy():
             return
 
         samples_path = os.path.join(os.path.dirname(__file__), "../Samples")
@@ -49,8 +64,7 @@ class ModuleTest(unittest.TestCase):
                               "RouteID", "50 FEET", out_table)
 
     def test_add_route_id_field(self):
-        if not arcpy:
-            self.skipTest("arcpy module not installed.")
+        if self.skip_if_no_arcpy():
             return
 
         sample_data = [
