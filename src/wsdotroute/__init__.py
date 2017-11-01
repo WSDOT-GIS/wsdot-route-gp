@@ -11,6 +11,8 @@ try:
 except ImportError:
     from arcpy import Describe
 
+def _get_row_count(view):
+    return int(arcpy.management.GetCount(view)[0])
 
 class RouteIdSuffixType(object):
     """Specifies valid route ID suffix types.
@@ -296,6 +298,7 @@ def field_list_contains(fields, name, type_re=re.compile(r"^(?:(?:String)|(?:Tex
             break
     return field_exists, correct_type
 
+
 def get_measures(in_geometry, route_geometry):
     """Finds the nearest point or route segement along a route polyline.
 
@@ -318,13 +321,15 @@ def get_measures(in_geometry, route_geometry):
         out_geometry = route_geometry.snapToLine(in_geometry.firstPoint)
         m1 = out_geometry.firstPoint.M
     elif isinstance(in_geometry, arcpy.Polyline):
-        p1, p2 = map(route_geometry.snapToLine, (in_geometry.firstPoint, in_geometry.lastPoint))
+        p1, p2 = map(route_geometry.snapToLine,
+                     (in_geometry.firstPoint, in_geometry.lastPoint))
         m1 = p1.firstPoint.M
         m2 = p2.firstPoint.M
         out_geometry = route_geometry.segmentAlongLine(m1, m2)
     else:
         raise TypeError("Invalid geometry type")
     return out_geometry, m1, m2
+
 
 def update_route_location(
         in_features,
@@ -378,7 +383,8 @@ def update_route_location(
         arcpy.AddWarning(
             "Field '%s' already exists and its data will be overwritten." % out_error_field)
 
-    update_fields = [in_features_route_id_field, "SHAPE@", out_error_field, measure_field]
+    update_fields = [in_features_route_id_field,
+                     "SHAPE@", out_error_field, measure_field]
     if end_measure_field:
         update_fields.append(end_measure_field)
 
@@ -392,7 +398,6 @@ def update_route_location(
         for row in update_cursor:
             in_route_id, event_geometry = row[:2]
 
-
             if not event_geometry:
                 row[2] = "Event geometry is NULL."
                 continue
@@ -401,7 +406,8 @@ def update_route_location(
                 route_geometry = None
                 for route_row in route_cursor:
                     route_geometry = route_row[0]
-                    updated_geometry, m1, m2 = get_measures(event_geometry, route_geometry)
+                    updated_geometry, m1, m2 = get_measures(
+                        event_geometry, route_geometry)
                     if rounding_digits is not None:
                         if m1:
                             m1 = round(m1, rounding_digits)
@@ -420,4 +426,153 @@ def update_route_location(
             update_cursor.updateRow(row)
 
     if error_count:
-        arcpy.AddWarning("Unable to locate %d out of %d events." % (error_count, feature_count))
+        arcpy.AddWarning("Unable to locate %d out of %d events." %
+                         (error_count, feature_count))
+
+
+def copy_with_segment_ids(input_point_features, out_feature_class):
+    """Copies point feature classes and adds SegmentID and IsEndPoint fields to the copy.
+
+    Parameters:
+        input_point_features: Path to a point feature class.
+        out_feature_class: Path where output feature class will be written. This feature class
+        will contain the following extra fields:
+            SegmentId:  Indicates which point features of input_point_features go together to define the
+                        begin and end points of a line segement.
+            IsEndPoint: Will have value of 1 if the the row represents an end point, 0 for a
+                        begin point.
+    Returns:
+        Returns a tuple: total number of rows (r), number of segments (s).
+        s = r / 2
+    """
+    row_count = int(arcpy.GetCount_management(input_point_features)[0])
+    if row_count % 2 != 0:
+        raise ValueError(
+            "Input feature class should have an even number of features.")
+
+    arcpy.AddMessage("Copying %s to %s..." % (input_point_features, out_feature_class))
+    arcpy.management.CopyFeatures(input_point_features, out_feature_class)
+    arcpy.AddMessage("Adding fields %s to %s" % (("SegmentId", "IsEndPoint"), out_feature_class))
+    arcpy.management.AddField(out_feature_class, "SegmentId", "LONG", field_alias="Segement ID")
+    arcpy.management.AddField(out_feature_class, "IsEndPoint", "SHORT", field_alias="Is end point")
+
+    arcpy.AddMessage("Calculating SegmentIDs and determining start and end points.")
+    i = -1
+    segment_id = -1
+    with arcpy.da.UpdateCursor(out_feature_class, ("SegmentId", "IsEndPoint")) as cursor:
+        for row in cursor:
+            i += 1
+            is_end_point = False
+            if i % 2 == 0:
+                segment_id += 1
+            else:
+                is_end_point = True
+            cursor.updateRow([segment_id, int(is_end_point)])
+
+    return i + 1, segment_id + 1
+
+
+def points_to_line_events(in_features, in_routes, route_id_field, radius, out_table):
+    """Using a point feature layer to represent begin and end points, finds nearest
+    route event points.
+    For parameter explanations, see http://pro.arcgis.com/en/pro-app/tool-reference/linear-referencing/locate-features-along-routes.htm
+    """
+    # Copy input features to new temporary feature class.
+    in_features_copy = arcpy.CreateScratchName(workspace="in_memory")
+
+    # Determine the segment IDs and store in Numpy structured array.
+    copy_with_segment_ids(in_features, in_features_copy)
+
+    temp_events_table = arcpy.CreateScratchName("AllEvents", workspace="in_memory")
+
+    try:
+        arcpy.AddMessage("Locating fields along routes...")
+        arcpy.lr.LocateFeaturesAlongRoutes(
+            in_features_copy, in_routes, route_id_field, radius, temp_events_table,
+            "RID POINT MEAS", "ALL", "DISTANCE", in_fields="FIELDS")
+    finally:
+        arcpy.AddMessage("Deleting %s" % in_features_copy)
+        arcpy.management.Delete(in_features_copy)
+
+    # Create layer name, removing the workspace part from the generated output.
+    events_layer = split_path(arcpy.CreateUniqueName("point_events", "in_memory"))[1]
+    end_events_table = arcpy.CreateScratchName("End", "PointEvents", workspace="in_memory")
+
+    try:
+        # Select start point events, copy to new table.
+        # Then switch the selection and copy the end point events to a new table.
+        arcpy.management.MakeTableView(temp_events_table, events_layer, None, "in_memory")
+
+        arcpy.management.SelectLayerByAttribute(events_layer, "NEW_SELECTION", "IsEndPoint = 0")
+
+
+        # copy selection to output table
+        arcpy.management.CopyRows(events_layer, out_table)
+
+        arcpy.management.SelectLayerByAttribute(events_layer, "SWITCH_SELECTION")
+
+        # copy selection to new temp table
+        arcpy.management.CopyRows(events_layer, end_events_table)
+
+        # Alter the field names in the end point events table
+        for field_name in ("RID", "MEAS", "Distance"):
+            new_name = "End%s" % field_name
+            arcpy.management.AlterField(end_events_table, field_name, new_name)
+
+        # Join the temp table end point data to the output table containg the begin point events.
+        arcpy.management.JoinField(out_table, "SegmentId", end_events_table, "SegmentId", ["EndRID", "EndMEAS", "EndDistance"])
+
+    finally:
+        for table in (events_layer, temp_events_table, end_events_table):
+            if table and arcpy.Exists(table):
+                arcpy.AddMessage("Deleting %s..." % table)
+                arcpy.management.Delete(table)
+
+
+    # Get a list of OIDs that need to be deleted.
+    oids_to_be_deleted = []
+    with arcpy.da.SearchCursor(out_table, ["OID@", "RID", "EndRID"]) as cursor:
+        for row in cursor:
+            oid, rid1, rid2 = row
+            if rid1 != rid2:
+                oids_to_be_deleted.append(oid)
+
+    drop_end_rid_field = True
+
+    # Delete rows from the output table where the start and end route IDs do not match
+    if oids_to_be_deleted:
+        try:
+            events_layer = split_path(arcpy.CreateScratchName("OutputEvents", workspace="in_memory"))[1]
+            arcpy.AddMessage("Rows with the following OIDs should be deleted: %s" % oids_to_be_deleted)
+            arcpy.AddMessage("Creating view %s on %s" % (events_layer, out_table))
+            arcpy.management.MakeTableView(out_table, events_layer)
+            # arcpy.management.SelectLayerByAttribute(events_layer, "NEW_SELECTION", "RID <> EndRID")
+            # Get OID field name
+
+            oid_field = arcpy.ListFields(out_table, field_type="OID")[0]
+            oid_list = ",".join(map(str, oids_to_be_deleted))
+            arcpy.management.SelectLayerByAttribute(events_layer, "NEW_SELECTION", "%s in (%s)" % (oid_field.name, oid_list))
+
+            selected_row_count = _get_row_count(events_layer)
+            drop_end_rid_field = True
+            if selected_row_count:
+                total_rows_before_delete = _get_row_count(out_table)
+                arcpy.AddMessage("There are %d rows where the start and end RIDs do not match. Deleting these rows..." % selected_row_count)
+                arcpy.management.DeleteRows(events_layer)
+                rows_after_delete = _get_row_count(out_table)
+                if rows_after_delete >= total_rows_before_delete:
+                    arcpy.AddWarning("%d rows were selected for deletion, but no rows were deleted." % selected_row_count)
+                    drop_end_rid_field = False
+            else:
+                arcpy.AddMessage("Zero rows were selected for deletion")
+        finally:
+            arcpy.management.Delete(events_layer)
+
+    if drop_end_rid_field:
+        for field in ("EndRID", "SegmentID", "IsEndPoint"):
+            try:
+                arcpy.DeleteField_management(out_table, field)
+            except arcpy.ExecuteError as ex:
+                arcpy.AddWarning("Could not delete field %s from %s.\n%s" % (field, out_table, ex))
+
+    return out_table
