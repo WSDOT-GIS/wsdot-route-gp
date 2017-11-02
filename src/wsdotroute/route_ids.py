@@ -5,6 +5,8 @@ Code contained herein does not require arcpy.
 from __future__ import absolute_import, division, print_function, unicode_literals
 import re
 
+# pylint:disable=too-few-public-methods
+
 class RouteIdSuffixType(object):
     """Specifies valid route ID suffix types.
     Values can be combined as bitflags (e.g, 1 | 2).

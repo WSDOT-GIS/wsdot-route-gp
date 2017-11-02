@@ -394,6 +394,7 @@ def copy_with_segment_ids(input_point_features, out_feature_class):
     i = -1
     segment_id = -1
     with arcpy.da.UpdateCursor(out_feature_class, ("SegmentId", "IsEndPoint")) as cursor:
+        # Need to iterate through row, but not actually use the variable itself
         for row in cursor:
             i += 1
             is_end_point = False
@@ -423,7 +424,7 @@ def points_to_line_events(in_features, in_routes, route_id_field, radius, out_ta
         arcpy.AddMessage("Locating fields along routes...")
         arcpy.lr.LocateFeaturesAlongRoutes(
             in_features_copy, in_routes, route_id_field, radius, temp_events_table,
-            "RID POINT MEAS", "ALL", "DISTANCE", in_fields="FIELDS")
+            "RID POINT Measure", "ALL", "DISTANCE", in_fields="FIELDS")
     finally:
         arcpy.AddMessage("Deleting %s" % in_features_copy)
         arcpy.management.Delete(in_features_copy)
@@ -449,12 +450,12 @@ def points_to_line_events(in_features, in_routes, route_id_field, radius, out_ta
         arcpy.management.CopyRows(events_layer, end_events_table)
 
         # Alter the field names in the end point events table
-        for field_name in ("RID", "MEAS", "Distance"):
+        for field_name in ("RID", "Measure", "Distance"):
             new_name = "End%s" % field_name
             arcpy.management.AlterField(end_events_table, field_name, new_name)
 
         # Join the temp table end point data to the output table containg the begin point events.
-        arcpy.management.JoinField(out_table, "SegmentId", end_events_table, "SegmentId", ["EndRID", "EndMEAS", "EndDistance"])
+        arcpy.management.JoinField(out_table, "SegmentId", end_events_table, "SegmentId", ["EndRID", "EndMeasure", "EndDistance"])
 
     finally:
         for table in (events_layer, temp_events_table, end_events_table):

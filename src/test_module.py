@@ -28,6 +28,7 @@ from wsdotroute.route_ids import standardize_route_id, RouteIdSuffixType
 class ModuleTest(unittest.TestCase):
     """Defines unit test test case.
     """
+
     def skip_if_no_arcpy(self):
         """Skips the current test if arcpy is not installed.
         Returns True if skipTest is called, False otherwise.
@@ -36,6 +37,7 @@ class ModuleTest(unittest.TestCase):
             self.skipTest("arcpy module not installed.")
             return True
         return False
+
     def test_route_id_parsing(self):
         """Tests the route id parsing function.
         This will still run even if arcpy is not available.
@@ -48,6 +50,7 @@ class ModuleTest(unittest.TestCase):
         # Test default parameters, which should be the same as above
         actual_out = standardize_route_id(in_id)
         self.assertEqual(expected_out, actual_out)
+
     def test_create_segment_id_table(self):
         """Tests the copy_with_segment_ids function.
         """
@@ -58,7 +61,8 @@ class ModuleTest(unittest.TestCase):
         input_layer = os.path.join(samples_path, "CrabBeginAndEndPoints.lyr")
         output_fc = arcpy.CreateScratchName(workspace="in_memory")
         try:
-            row_count, segment_count = copy_with_segment_ids(input_layer, output_fc)
+            row_count, segment_count = copy_with_segment_ids(
+                input_layer, output_fc)
             self.assertTrue(arcpy.Exists(output_fc))
             self.assertEqual(row_count / 2, segment_count)
         finally:
@@ -70,13 +74,19 @@ class ModuleTest(unittest.TestCase):
         if self.skip_if_no_arcpy():
             return
 
-        samples_path = os.path.join(os.path.dirname(__file__), "../Samples")
-        input_layer = os.path.join(samples_path, "CrabBeginAndEndPoints.lyr")
-        routes_layer = os.path.join(samples_path, "CrabRoutes.lyr")
-        out_table = arcpy.CreateScratchName(workspace="in_memory")
-        points_to_line_events(input_layer, routes_layer,
-                              "RouteID", "50 FEET", out_table)
-        self.assertTrue(arcpy.Exists(out_table))
+        try:
+            samples_path = os.path.join(
+                os.path.dirname(__file__), "../Samples")
+            input_layer = os.path.join(
+                samples_path, "CrabBeginAndEndPoints.lyr")
+            routes_layer = os.path.join(samples_path, "CrabRoutes.lyr")
+            out_table = arcpy.CreateScratchName(workspace="in_memory")
+            points_to_line_events(input_layer, routes_layer,
+                                  "RouteID", "50 FEET", out_table)
+            self.assertTrue(arcpy.Exists(out_table))
+        finally:
+            if out_table and arcpy.Exists(out_table):
+                arcpy.management.Delete(out_table)
 
     def test_add_route_id_field(self):
         """Tests the add_route_id_field function.
@@ -107,7 +117,8 @@ class ModuleTest(unittest.TestCase):
                     [field_names[1], "TEXT", None, None]
                 ])
             except AttributeError:
-                arcpy.management.AddField(table_path, field_names[0], "TEXT", field_length=11)
+                arcpy.management.AddField(
+                    table_path, field_names[0], "TEXT", field_length=11)
                 arcpy.management.AddField(table_path, field_names[1], "TEXT")
 
             # Populate the new table.
