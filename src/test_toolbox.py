@@ -5,15 +5,28 @@ from __future__ import (unicode_literals, print_function, division,
 
 import unittest
 import os
-import arcpy
+try:
+    import arcpy
+except ImportError:
+    arcpy = None
 
 
 class TestWsdotRoute(unittest.TestCase):
     """Unit tests
     """
+    def skip_if_no_arcpy(self):
+        """Skips the current test if arcpy is not installed.
+        Returns True if skipTest is called, False otherwise.
+        """
+        if not arcpy:
+            self.skipTest("arcpy module not installed.")
+            return True
+        return False
     def test_create_event_feature_class(self):
         """Tests the ability to create an event feature class.
         """
+        if self.skip_if_no_arcpy():
+            self.skipTest("The arcpy module is not available.")
         toolbox_path = None
         if 'wsdotroute' not in dir(arcpy):
             toolbox_path = os.path.join(
