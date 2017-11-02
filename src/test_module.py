@@ -16,20 +16,30 @@ except ImportError:
     # to see if arcpy is truthy, and if it isn't, skip the test.
     arcpy = None
 else:
+    # These modules require arcpy, so we'll only import them
+    # if arcpy is available.
     from wsdotroute import (add_standardized_route_id_field,
                             copy_with_segment_ids,
                             points_to_line_events)
-from wsdotroute import standardize_route_id, RouteIdSuffixType
+# These modules do not require arcpy so will always be imported.
+from wsdotroute.route_ids import standardize_route_id, RouteIdSuffixType
 
 
 class ModuleTest(unittest.TestCase):
+    """Defines unit test test case.
+    """
     def skip_if_no_arcpy(self):
+        """Skips the current test if arcpy is not installed.
+        Returns True if skipTest is called, False otherwise.
+        """
         if not arcpy:
             self.skipTest("arcpy module not installed.")
             return True
-        else:
-            return False
+        return False
     def test_route_id_parsing(self):
+        """Tests the route id parsing function.
+        This will still run even if arcpy is not available.
+        """
         in_id = "I-5"
         expected_out = "005i"
         actual_out = standardize_route_id(
@@ -39,6 +49,8 @@ class ModuleTest(unittest.TestCase):
         actual_out = standardize_route_id(in_id)
         self.assertEqual(expected_out, actual_out)
     def test_create_segment_id_table(self):
+        """Tests the copy_with_segment_ids function.
+        """
         if self.skip_if_no_arcpy():
             return
 
@@ -53,6 +65,8 @@ class ModuleTest(unittest.TestCase):
             arcpy.management.Delete(output_fc)
 
     def test_points_to_line_events(self):
+        """Tests the points_to_line_events function
+        """
         if self.skip_if_no_arcpy():
             return
 
@@ -62,8 +76,11 @@ class ModuleTest(unittest.TestCase):
         out_table = arcpy.CreateScratchName(workspace="in_memory")
         points_to_line_events(input_layer, routes_layer,
                               "RouteID", "50 FEET", out_table)
+        self.assertTrue(arcpy.Exists(out_table))
 
     def test_add_route_id_field(self):
+        """Tests the add_route_id_field function.
+        """
         if self.skip_if_no_arcpy():
             return
 
@@ -73,7 +90,7 @@ class ModuleTest(unittest.TestCase):
         ]
         expected_output = [
             ["I-5", "d", "005d", None],
-            ["005", "i", "005", None]
+            ["005", "i", "005i", None]
         ]
 
         field_names = ("RouteID", "Direction", "MergedRouteId", "Error")
@@ -92,6 +109,11 @@ class ModuleTest(unittest.TestCase):
             except AttributeError:
                 arcpy.management.AddField(table_path, field_names[0], "TEXT", field_length=11)
                 arcpy.management.AddField(table_path, field_names[1], "TEXT")
+
+            # Populate the new table.
+            with arcpy.da.InsertCursor(table_path, field_names[0:2]) as cursor:
+                for row in sample_data:
+                    cursor.insertRow(row)
 
             # Call funciton to add field
             add_standardized_route_id_field(
