@@ -20,10 +20,8 @@ else:
     # if arcpy is available.
     from wsdotroute import (add_standardized_route_id_field,
                             copy_with_segment_ids,
-                            points_to_line_event_features)
-# These modules do not require arcpy so will always be imported.
-from wsdotroute.route_ids import standardize_route_id, RouteIdSuffixType
-
+                            points_to_line_event_features,
+                            standardize_route_id, RouteIdSuffixType)
 
 class ModuleTest(unittest.TestCase):
     """Defines unit test test case.
