@@ -40,6 +40,8 @@ class ModuleTest(unittest.TestCase):
         """Tests the route id parsing function.
         This will still run even if arcpy is not available.
         """
+        if self.skip_if_no_arcpy():
+            return
         in_id = "I-5"
         expected_out = "005i"
         actual_out = standardize_route_id(

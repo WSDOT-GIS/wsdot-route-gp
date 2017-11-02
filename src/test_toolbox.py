@@ -26,7 +26,7 @@ class TestWsdotRoute(unittest.TestCase):
         """Tests the ability to create an event feature class.
         """
         if self.skip_if_no_arcpy():
-            self.skipTest("The arcpy module is not available.")
+            return
         toolbox_path = None
         if 'wsdotroute' not in dir(arcpy):
             toolbox_path = os.path.join(
