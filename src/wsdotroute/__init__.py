@@ -12,10 +12,9 @@ try:
 except ImportError:
     from arcpy import Describe
 
+
 def _get_row_count(view):
     return int(arcpy.management.GetCount(view)[0])
-
-
 
 
 def add_standardized_route_id_field(in_table, route_id_field, direction_field, out_field_name, out_error_field_name, route_id_suffix_type, wsdot_validation=True):
@@ -384,13 +383,18 @@ def copy_with_segment_ids(input_point_features, out_feature_class):
         raise ValueError(
             "Input feature class should have an even number of features.")
 
-    arcpy.AddMessage("Copying %s to %s..." % (input_point_features, out_feature_class))
+    arcpy.AddMessage("Copying %s to %s..." %
+                     (input_point_features, out_feature_class))
     arcpy.management.CopyFeatures(input_point_features, out_feature_class)
-    arcpy.AddMessage("Adding fields %s to %s" % (("SegmentId", "IsEndPoint"), out_feature_class))
-    arcpy.management.AddField(out_feature_class, "SegmentId", "LONG", field_alias="Segement ID")
-    arcpy.management.AddField(out_feature_class, "IsEndPoint", "SHORT", field_alias="Is end point")
+    arcpy.AddMessage("Adding fields %s to %s" %
+                     (("SegmentId", "IsEndPoint"), out_feature_class))
+    arcpy.management.AddField(
+        out_feature_class, "SegmentId", "LONG", field_alias="Segement ID")
+    arcpy.management.AddField(
+        out_feature_class, "IsEndPoint", "SHORT", field_alias="Is end point")
 
-    arcpy.AddMessage("Calculating SegmentIDs and determining start and end points.")
+    arcpy.AddMessage(
+        "Calculating SegmentIDs and determining start and end points.")
     i = -1
     segment_id = -1
     with arcpy.da.UpdateCursor(out_feature_class, ("SegmentId", "IsEndPoint")) as cursor:
@@ -411,6 +415,9 @@ def points_to_line_events(in_features, in_routes, route_id_field, radius, out_ta
     """Using a point feature layer to represent begin and end points, finds nearest
     route event points.
     For parameter explanations, see http://pro.arcgis.com/en/pro-app/tool-reference/linear-referencing/locate-features-along-routes.htm
+
+    Returns
+        Returns a tuple: (out_table, output event features for use with arcpy.lr.MakeRouteEventLayer)
     """
     # Copy input features to new temporary feature class.
     in_features_copy = arcpy.CreateScratchName(workspace="in_memory")
@@ -418,7 +425,8 @@ def points_to_line_events(in_features, in_routes, route_id_field, radius, out_ta
     # Determine the segment IDs and store in Numpy structured array.
     copy_with_segment_ids(in_features, in_features_copy)
 
-    temp_events_table = arcpy.CreateScratchName("AllEvents", workspace="in_memory")
+    temp_events_table = arcpy.CreateScratchName(
+        "AllEvents", workspace="in_memory")
 
     try:
         arcpy.AddMessage("Locating fields along routes...")
@@ -430,21 +438,25 @@ def points_to_line_events(in_features, in_routes, route_id_field, radius, out_ta
         arcpy.management.Delete(in_features_copy)
 
     # Create layer name, removing the workspace part from the generated output.
-    events_layer = split_path(arcpy.CreateUniqueName("point_events", "in_memory"))[1]
-    end_events_table = arcpy.CreateScratchName("End", "PointEvents", workspace="in_memory")
+    events_layer = split_path(
+        arcpy.CreateUniqueName("point_events", "in_memory"))[1]
+    end_events_table = arcpy.CreateScratchName(
+        "End", "PointEvents", workspace="in_memory")
 
     try:
         # Select start point events, copy to new table.
         # Then switch the selection and copy the end point events to a new table.
-        arcpy.management.MakeTableView(temp_events_table, events_layer, None, "in_memory")
+        arcpy.management.MakeTableView(
+            temp_events_table, events_layer, None, "in_memory")
 
-        arcpy.management.SelectLayerByAttribute(events_layer, "NEW_SELECTION", "IsEndPoint = 0")
-
+        arcpy.management.SelectLayerByAttribute(
+            events_layer, "NEW_SELECTION", "IsEndPoint = 0")
 
         # copy selection to output table
         arcpy.management.CopyRows(events_layer, out_table)
 
-        arcpy.management.SelectLayerByAttribute(events_layer, "SWITCH_SELECTION")
+        arcpy.management.SelectLayerByAttribute(
+            events_layer, "SWITCH_SELECTION")
 
         # copy selection to new temp table
         arcpy.management.CopyRows(events_layer, end_events_table)
@@ -455,14 +467,14 @@ def points_to_line_events(in_features, in_routes, route_id_field, radius, out_ta
             arcpy.management.AlterField(end_events_table, field_name, new_name)
 
         # Join the temp table end point data to the output table containg the begin point events.
-        arcpy.management.JoinField(out_table, "SegmentId", end_events_table, "SegmentId", ["EndRID", "EndMeasure", "EndDistance"])
+        arcpy.management.JoinField(out_table, "SegmentId", end_events_table, "SegmentId", [
+                                   "EndRID", "EndMeasure", "EndDistance"])
 
     finally:
         for table in (events_layer, temp_events_table, end_events_table):
             if table and arcpy.Exists(table):
                 arcpy.AddMessage("Deleting %s..." % table)
                 arcpy.management.Delete(table)
-
 
     # Get a list of OIDs that need to be deleted.
     oids_to_be_deleted = []
@@ -477,26 +489,32 @@ def points_to_line_events(in_features, in_routes, route_id_field, radius, out_ta
     # Delete rows from the output table where the start and end route IDs do not match
     if oids_to_be_deleted:
         try:
-            events_layer = split_path(arcpy.CreateScratchName("OutputEvents", workspace="in_memory"))[1]
-            arcpy.AddMessage("Rows with the following OIDs should be deleted: %s" % oids_to_be_deleted)
-            arcpy.AddMessage("Creating view %s on %s" % (events_layer, out_table))
+            events_layer = split_path(arcpy.CreateScratchName(
+                "OutputEvents", workspace="in_memory"))[1]
+            arcpy.AddMessage(
+                "Rows with the following OIDs should be deleted: %s" % oids_to_be_deleted)
+            arcpy.AddMessage("Creating view %s on %s" %
+                             (events_layer, out_table))
             arcpy.management.MakeTableView(out_table, events_layer)
             # arcpy.management.SelectLayerByAttribute(events_layer, "NEW_SELECTION", "RID <> EndRID")
             # Get OID field name
 
             oid_field = arcpy.ListFields(out_table, field_type="OID")[0]
             oid_list = ",".join(map(str, oids_to_be_deleted))
-            arcpy.management.SelectLayerByAttribute(events_layer, "NEW_SELECTION", "%s in (%s)" % (oid_field.name, oid_list))
+            arcpy.management.SelectLayerByAttribute(
+                events_layer, "NEW_SELECTION", "%s in (%s)" % (oid_field.name, oid_list))
 
             selected_row_count = _get_row_count(events_layer)
             drop_end_rid_field = True
             if selected_row_count:
                 total_rows_before_delete = _get_row_count(out_table)
-                arcpy.AddMessage("There are %d rows where the start and end RIDs do not match. Deleting these rows..." % selected_row_count)
+                arcpy.AddMessage(
+                    "There are %d rows where the start and end RIDs do not match. Deleting these rows..." % selected_row_count)
                 arcpy.management.DeleteRows(events_layer)
                 rows_after_delete = _get_row_count(out_table)
                 if rows_after_delete >= total_rows_before_delete:
-                    arcpy.AddWarning("%d rows were selected for deletion, but no rows were deleted." % selected_row_count)
+                    arcpy.AddWarning(
+                        "%d rows were selected for deletion, but no rows were deleted." % selected_row_count)
                     drop_end_rid_field = False
             else:
                 arcpy.AddMessage("Zero rows were selected for deletion")
@@ -508,6 +526,32 @@ def points_to_line_events(in_features, in_routes, route_id_field, radius, out_ta
             try:
                 arcpy.DeleteField_management(out_table, field)
             except arcpy.ExecuteError as ex:
-                arcpy.AddWarning("Could not delete field %s from %s.\n%s" % (field, out_table, ex))
+                arcpy.AddWarning(
+                    "Could not delete field %s from %s.\n%s" % (field, out_table, ex))
 
-    return out_table
+    return out_table, "RID LINE Measure EndMeasure"
+
+
+def points_to_line_event_features(in_features, in_routes, route_id_field, radius, out_feature_class):
+    """Given an input feature layer of points representing route segment start and end points,
+    locates those points along the given route layer's routes and returns the output route line segment
+    event feature class.
+    """
+    # Create name for temporary event table.
+    event_table = arcpy.CreateScratchName(
+        "event_table", workspace="in_memory")
+    # Create line events for input point features, writing to the event_table.
+    event_table, event_properties = points_to_line_events(in_features, in_routes,
+                                                          route_id_field, radius, event_table)
+    # Create a name for the event layer.
+    event_layer = split_path(arcpy.CreateScratchName(
+        "located_events", workspace="in_memory"))[1]
+    # Create the event layer.
+    arcpy.lr.MakeRouteEventLayer(
+        in_routes, route_id_field, event_table, event_properties, event_layer, None, "ERROR_FIELD")
+    # Copy the event layer to a feature class.
+    arcpy.management.CopyFeatures(event_layer, out_feature_class)
+    # Delete the temporary tables and layers.
+    for item in (event_layer, event_table):
+        if item and arcpy.Exists(item):
+            arcpy.management.Delete(item)

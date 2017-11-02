@@ -20,7 +20,7 @@ else:
     # if arcpy is available.
     from wsdotroute import (add_standardized_route_id_field,
                             copy_with_segment_ids,
-                            points_to_line_events)
+                            points_to_line_event_features)
 # These modules do not require arcpy so will always be imported.
 from wsdotroute.route_ids import standardize_route_id, RouteIdSuffixType
 
@@ -81,9 +81,28 @@ class ModuleTest(unittest.TestCase):
                 samples_path, "CrabBeginAndEndPoints.lyr")
             routes_layer = os.path.join(samples_path, "CrabRoutes.lyr")
             out_table = arcpy.CreateScratchName(workspace="in_memory")
-            points_to_line_events(input_layer, routes_layer,
-                                  "RouteID", "50 FEET", out_table)
+            points_to_line_event_features(input_layer, routes_layer,
+                                          "RouteID", "50 FEET", out_table)
             self.assertTrue(arcpy.Exists(out_table))
+
+            null_geometry_detected, null_rid, null_m, null_m2 = (False,) * 4
+            # Assertions per row
+            with arcpy.da.SearchCursor(out_table, ("SHAPE@", "RID", "Measure", "EndMeasure")) as cursor:
+                for (shape, rid, measure, end_measure) in cursor:
+                    if not shape:
+                        null_geometry_detected = True
+                    if not rid:
+                        null_rid = True
+                    if measure is None:
+                        null_m = True
+                    if end_measure is None:
+                        null_m2 = True
+                    if null_geometry_detected and null_rid and null_m and null_m2:
+                        break
+            self.assertFalse(null_geometry_detected, "The output feature class should not contain null geometry.")
+            self.assertFalse(null_rid, "Should not contain null RID values")
+            self.assertFalse(null_m, "No measures should be null")
+            self.assertFalse(null_m2, "No end measures should be null")
         finally:
             if out_table and arcpy.Exists(out_table):
                 arcpy.management.Delete(out_table)

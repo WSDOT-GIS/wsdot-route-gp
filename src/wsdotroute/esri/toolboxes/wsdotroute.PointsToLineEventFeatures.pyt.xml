@@ -1,0 +1,38 @@
+<metadata xml:lang="en"><Esri><CreaDate>20171031</CreaDate><CreaTime>13581300</CreaTime><ArcGISFormat>1.0</ArcGISFormat><ArcGISstyle>ISO 19139 Metadata Implementation Specification</ArcGISstyle><SyncOnce>TRUE</SyncOnce><ModDate>20171102</ModDate><ModTime>11053100</ModTime><scaleRange><minScale>150000000</minScale><maxScale>5000</maxScale></scaleRange><ArcGISProfile>ISO19139</ArcGISProfile><DataProperties><itemProps><imsContentType export="False"/></itemProps></DataProperties></Esri><tool name="PointsToLineEventFeatures" displayname="Points to Line Event Features" toolboxalias="wsdotroute" xmlns=""><arcToolboxHelpPath>c:\program files (x86)\arcgis\desktop10.5\Help\gp</arcToolboxHelpPath><parameters><param name="in_features" displayname="Input Features" type="Required" direction="Input" datatype="Feature Layer" expression="in_features"><dialogReference>&lt;DIV STYLE="text-align:Left;"&gt;&lt;DIV&gt;&lt;P&gt;&lt;SPAN&gt;A point feature layer containing an even number of features.&lt;/SPAN&gt;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;</dialogReference><pythonReference>&lt;DIV STYLE="text-align:Left;"&gt;&lt;DIV&gt;&lt;P&gt;&lt;SPAN&gt;A point feature layer containing an even number of features.&lt;/SPAN&gt;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;</pythonReference></param><param name="in_routes" displayname="Route Layer" type="Required" direction="Input" datatype="Feature Layer" expression="in_routes"><dialogReference>&lt;DIV STYLE="text-align:Left;"&gt;&lt;DIV&gt;&lt;P&gt;&lt;SPAN&gt;A feature layer containing route polylines.&lt;/SPAN&gt;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;</dialogReference><pythonReference>&lt;DIV STYLE="text-align:Left;"&gt;&lt;DIV&gt;&lt;P&gt;&lt;SPAN&gt;A feature layer containing route polylines.&lt;/SPAN&gt;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;</pythonReference></param><param name="route_id_field" displayname="Route ID Field" type="Required" direction="Input" datatype="Field" expression="route_id_field"><dialogReference>&lt;DIV STYLE="text-align:Left;"&gt;&lt;DIV&gt;&lt;P&gt;&lt;SPAN&gt;The field in the route layer that contains a unique route identifier.&lt;/SPAN&gt;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;</dialogReference><pythonReference>&lt;DIV STYLE="text-align:Left;"&gt;&lt;DIV&gt;&lt;P&gt;&lt;SPAN&gt;The field in the route layer that contains a unique route identifier.&lt;/SPAN&gt;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;</pythonReference></param><param name="radius" displayname="Radius" type="Required" direction="Input" datatype="Linear unit" expression="radius"><dialogReference>&lt;DIV STYLE="text-align:Left;"&gt;&lt;DIV&gt;&lt;P&gt;&lt;SPAN&gt;The distance to search around the input points for a nearby route feature.&lt;/SPAN&gt;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;</dialogReference><pythonReference>&lt;DIV STYLE="text-align:Left;"&gt;&lt;P&gt;&lt;SPAN&gt;The distance to search around the input points for a nearby route feature.&lt;/SPAN&gt;&lt;/P&gt;&lt;/DIV&gt;</pythonReference></param><param name="out_feature_class" displayname="Output Feature Class" type="Required" direction="Output" datatype="Feature Class" expression="out_feature_class"><dialogReference>&lt;DIV STYLE="text-align:Left;"&gt;&lt;DIV&gt;&lt;P&gt;&lt;SPAN&gt;Specifies where the output feature class will be written to.&lt;/SPAN&gt;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;</dialogReference><pythonReference>&lt;DIV STYLE="text-align:Left;"&gt;&lt;DIV&gt;&lt;P&gt;&lt;SPAN&gt;Specifies where the output feature class will be written to.&lt;/SPAN&gt;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;</pythonReference></param></parameters><summary>&lt;DIV STYLE="text-align:Left;"&gt;&lt;DIV&gt;&lt;DIV&gt;&lt;P&gt;&lt;SPAN&gt;Given a point layer with an even number of rows, where every other row represents a start and end point, locates line segments that start and end at those points.&lt;/SPAN&gt;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;&lt;/DIV&gt;</summary><scriptExamples><scriptExample><title>Example1</title><code>def test_points_to_line_events(self):
+    """Tests the points_to_line_events function
+    """
+    if self.skip_if_no_arcpy():
+        return
+
+    try:
+        samples_path = os.path.join(
+            os.path.dirname(__file__), "../Samples")
+        input_layer = os.path.join(
+            samples_path, "CrabBeginAndEndPoints.lyr")
+        routes_layer = os.path.join(samples_path, "CrabRoutes.lyr")
+        out_table = arcpy.CreateScratchName(workspace="in_memory")
+        points_to_line_event_features(input_layer, routes_layer,
+                                        "RouteID", "50 FEET", out_table)
+        self.assertTrue(arcpy.Exists(out_table))
+
+        null_geometry_detected, null_rid, null_m, null_m2 = (False,) * 4
+        # Assertions per row
+        with arcpy.da.SearchCursor(out_table, ("SHAPE@", "RID", "Measure", "EndMeasure")) as cursor:
+            for (shape, rid, measure, end_measure) in cursor:
+                if not shape:
+                    null_geometry_detected = True
+                if not rid:
+                    null_rid = True
+                if measure is None:
+                    null_m = True
+                if end_measure is None:
+                    null_m2 = True
+                if null_geometry_detected and null_rid and null_m and null_m2:
+                    break
+        self.assertFalse(null_geometry_detected, "The output feature class should not contain null geometry.")
+        self.assertFalse(null_rid, "Should not contain null RID values")
+        self.assertFalse(null_m, "No measures should be null")
+        self.assertFalse(null_m2, "No end measures should be null")
+    finally:
+        if out_table and arcpy.Exists(out_table):
+            arcpy.management.Delete(out_table)</code><para>&lt;DIV STYLE="text-align:Left;"&gt;&lt;DIV&gt;&lt;DIV&gt;&lt;P&gt;&lt;SPAN&gt;Unit test using the function&lt;/SPAN&gt;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;&lt;/DIV&gt;</para></scriptExample></scriptExamples></tool><dataIdInfo><idCitation xmlns=""><resTitle>Points to Line Event Features</resTitle><date><createDate>2017-11-01T00:00:00</createDate></date></idCitation><idAbs>&lt;DIV STYLE="text-align:Left;"&gt;&lt;DIV&gt;&lt;DIV&gt;&lt;P&gt;&lt;SPAN&gt;Given a point layer with an even number of rows, where every other row represents a start and end point, locates line segments that start and end at those points.&lt;/SPAN&gt;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;&lt;/DIV&gt;</idAbs><idCredit>Created for WSDOT by Jeff Jacobson</idCredit><dataLang><languageCode value="eng"/></dataLang><dataChar><CharSetCd value="004"/></dataChar><tpCat><TopicCatCd value="018"/></tpCat></dataIdInfo><mdChar><CharSetCd value="004"/></mdChar><mdLang><languageCode value="eng"/></mdLang><mdDateSt>20171101</mdDateSt><mdContact xmlns=""><rpIndName>Jeff Jacobson</rpIndName><rpOrgName>WSDOT</rpOrgName><rpPosName>Developer</rpPosName><role><RoleCd value="011"/></role></mdContact><mdHrLv><ScopeCd value="013"/></mdHrLv><mdHrLvName>Geoprocessing Tool</mdHrLvName></metadata>

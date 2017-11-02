@@ -10,6 +10,7 @@ try:
                             create_event_feature_class,
                             update_route_location,
                             points_to_line_events,
+                            points_to_line_event_features,
                             RouteIdSuffixType)
 except ImportError:
     from sys import path
@@ -26,6 +27,7 @@ except ImportError:
                             create_event_feature_class,
                             update_route_location,
                             points_to_line_events,
+                            points_to_line_event_features,
                             RouteIdSuffixType)
 
 # pylint:disable=invalid-name,no-self-use,unused-argument,too-few-public-methods,too-many-locals,too-many-branches
@@ -92,7 +94,7 @@ class Toolbox(object):
         # List of tool classes associated with this toolbox
         self.tools = [LocateRouteEvents,
                       AddDirectionedRouteIdField, UpdateRouteLocation,
-                      PointsToLineEvents]
+                      PointsToLineEvents, PointsToLineEventFeatures]
 
 
 class AddDirectionedRouteIdField(object):
@@ -479,7 +481,7 @@ class PointsToLineEvents(object):
         '''Define the tool (tool name is the name of the class).'''
         self.label = 'Points to Line Events'
         self.description = ''
-        self.canRunInBackground = False
+        self.canRunInBackground = True
 
     def getParameterInfo(self):
         '''Define parameter definitions'''
@@ -528,5 +530,60 @@ class PointsToLineEvents(object):
 
     def execute(self, parameters, messages):
         '''The source code of the tool.'''
-        gp_result = points_to_line_events(*map(lambda p: p.valueAsText, parameters))
+        points_to_line_events(*map(lambda p: p.valueAsText, parameters))
+        return
+
+class PointsToLineEventFeatures(object):
+    def __init__(self):
+        '''Define the tool (tool name is the name of the class).'''
+        self.label = 'Points to Line Event Features'
+        self.description = ''
+        self.canRunInBackground = True
+
+    def getParameterInfo(self):
+        '''Define parameter definitions'''
+        # in_features_param = arcpy.Parameter(
+        #     'in_features', "Input Features", "Input", "GPFeatureRecordSetLayer", "Required")
+        # in_features_param.value = join_path(dirname(__file__), "PointFeaturesTemplate.lyr")
+
+        in_features_param = arcpy.Parameter(
+            'in_features', "Input Features", "Input", "GPFeatureLayer", "Required")
+        in_features_param.filter.list = ["Point"]
+
+
+        in_routes_param = arcpy.Parameter(
+            "in_routes", "Route Layer", "Input", "GPFeatureLayer", "Required")
+        route_id_field_param = arcpy.Parameter(
+            "route_id_field", "Route ID Field", "Input", "Field", "Required")
+        route_id_field_param.parameterDependencies = [in_routes_param.name]
+
+        radius_param = arcpy.Parameter(
+            "radius", "Radius", "Input", "GPLinearUnit", "Required")
+        # radius_param.valueAsText = "50 FEET"
+
+        out_table_param = arcpy.Parameter(
+            "out_feature_class", "Output Feature Class", "Output", "DEFeatureClass", "Required")
+
+        params = [in_features_param, in_routes_param,
+                  route_id_field_param, radius_param, out_table_param]
+        return params
+
+    def isLicensed(self):
+        '''Set whether tool is licensed to execute.'''
+        return True
+
+    def updateParameters(self, parameters):
+        '''Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed.'''
+        return
+
+    def updateMessages(self, parameters):
+        '''Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation.'''
+        return
+
+    def execute(self, parameters, messages):
+        '''The source code of the tool.'''
+        points_to_line_event_features(*map(lambda p: p.valueAsText, parameters))
         return
