@@ -12,7 +12,7 @@
     See https://pro.arcgis.com/en/pro-app/arcpy/geoprocessing_and_python/extending-geoprocessing-through-python-modules.htm
 #>
 
-$commonRoot = ".\src\wsdotroute\esri"
+$commonRoot = ".\wsdotroute\esri"
 $src = "$commonRoot\toolboxes"
 $dest = "$commonRoot\help\gp\toolboxes"
 Write-Host "Copying metadata files"

@@ -12,7 +12,7 @@ Run Unit Tests
 --------------
 
 ```console
-python -m unittest discover -f src
+python -m unittest
 ```
 
 Notes

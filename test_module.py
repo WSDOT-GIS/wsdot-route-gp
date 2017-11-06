@@ -57,7 +57,7 @@ class ModuleTest(unittest.TestCase):
         if self.skip_if_no_arcpy():
             return
 
-        samples_path = os.path.join(os.path.dirname(__file__), "../Samples")
+        samples_path = os.path.join(os.path.dirname(__file__), "Samples")
         input_layer = os.path.join(samples_path, "CrabBeginAndEndPoints.lyr")
         output_fc = arcpy.CreateScratchName(workspace="in_memory")
         try:
@@ -76,7 +76,7 @@ class ModuleTest(unittest.TestCase):
 
         try:
             samples_path = os.path.join(
-                os.path.dirname(__file__), "../Samples")
+                os.path.dirname(__file__), "Samples")
             input_layer = os.path.join(
                 samples_path, "CrabBeginAndEndPoints.lyr")
             routes_layer = os.path.join(samples_path, "CrabRoutes.lyr")
