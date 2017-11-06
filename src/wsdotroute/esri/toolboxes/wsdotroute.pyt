@@ -396,11 +396,11 @@ class UpdateRouteLocation(object):
     def getParameterInfo(self):
         '''Define parameter definitions'''
         in_features_param = arcpy.Parameter("in_features", "Input Features", "Input",
-                                            "DEFeatureClass", "Required")
+                                            "GPFeatureLayer", "Required")
         in_features_param.filter.list = ["Point", "Polyline"]
 
         route_layer_param = arcpy.Parameter("route_layer", "Route Layer", "Input",
-                                            "DEFeatureClass", "Required")
+                                            "GPFeatureLayer", "Required")
         route_layer_param.filter.list = ["Polyline"]
 
         in_features_route_id_field_param = arcpy.Parameter(

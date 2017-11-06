@@ -1,6 +1,7 @@
+*.mxd
 *.gdb
 *.rst
-src/wsdotroute/esri/help/gp/toolboxes/*
+**/esri/help/gp/toolboxes/*
 
 .vscode/*
 !.vscode/settings.json

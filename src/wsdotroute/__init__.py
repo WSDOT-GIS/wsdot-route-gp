@@ -198,7 +198,7 @@ def create_event_feature_class(event_table,
     return out_fc
 
 
-def field_list_contains(fields, name, type_re=re.compile(r"^(?:(?:String)|(?:Text))$", re.IGNORECASE)):
+def field_list_contains(fields, name, field_type="TEXT"):
     """Determines if a list of fields contains a field with the given name and type.
 
     Args:
@@ -216,6 +216,28 @@ def field_list_contains(fields, name, type_re=re.compile(r"^(?:(?:String)|(?:Tex
         fields = arcpy.ListFields(r"c:/temp/example.gdb/my_features")
         field_exists, correct_type = _field_list_contains(fields, "LOC_ERROR")
     """
+
+    field_mapping = {
+        "BLOB": "Blob",
+        "DATE": "Date",
+        "DOUBLE": "Double",
+        # "Geometry": "Geometry",
+        # "GlobalID": "GlobalID",
+        "GUID": "Guid",
+        "LONG": "Integer",
+        # "OID": "OID",
+        # "Raster": "Raster",
+        "FLOAT": "Single",
+        "SHORT": "SmallInteger",
+        "TEXT": "String"
+    }
+
+    type_re_parts = "|".join(
+        map(lambda s: r"(?:%s)" % s, (field_type, field_mapping[field_type]))
+    )
+
+    type_re = re.compile(r"^(?:%s)$" % type_re_parts, re.IGNORECASE)
+
     field_exists = False
     correct_type = False
     name_re = re.compile("^%s$" % name)
@@ -238,26 +260,25 @@ def get_measures(in_geometry, route_geometry):
     Returns:
         A tuple with the following values
             * located geometry
-            * begin measure (or only measure for points)
-            * end measure (or None for points)
+            * Begin, End point info tuples: (nearest_point, measure, distance, right_site)
+                Will contain one item if input is point, two if input is polyline.
+
     """
     if not isinstance(route_geometry, arcpy.Polyline):
         raise TypeError("route_geometry must be a Polyline.")
-
-    m1, m2, out_geometry = (None,) * 3
-    if isinstance(in_geometry, arcpy.PointGeometry):
-        # nearest_point, distance_from_start, min_distance, right_side =  route_geometry.queryPointAndDistance(in_geometry.firstPoint)
-        out_geometry = route_geometry.snapToLine(in_geometry.firstPoint)
-        m1 = out_geometry.firstPoint.M
-    elif isinstance(in_geometry, arcpy.Polyline):
-        p1, p2 = map(route_geometry.snapToLine,
-                     (in_geometry.firstPoint, in_geometry.lastPoint))
-        m1 = p1.firstPoint.M
-        m2 = p2.firstPoint.M
-        out_geometry = route_geometry.segmentAlongLine(m1, m2)
+    p1_info, p2_info = (None,) * 2
+    if isinstance(in_geometry, (arcpy.PointGeometry, arcpy.Polyline)):
+        p1_info = route_geometry.queryPointAndDistance(in_geometry.firstPoint)
+        if isinstance(in_geometry, arcpy.Polyline):
+            p2_info = route_geometry.queryPointAndDistance(
+                in_geometry.lastPoint)
+            out_geometry = route_geometry.segmentAlongLine(
+                p1_info[1], p2_info[1])
+        else:
+            out_geometry = p1_info[0]
     else:
         raise TypeError("Invalid geometry type")
-    return out_geometry, m1, m2
+    return out_geometry, p1_info, p2_info
 
 
 def update_route_location(
@@ -289,6 +310,8 @@ def update_route_location(
     # source_oid_field: The name of the source Object ID field in the output feature class.
 
     out_error_field = "LOC_ERROR"
+    distance_1_field = "Distance"
+    distance_2_field = "EndDistance"
 
     route_desc = Describe(route_layer)
     in_features_desc = Describe(in_features)
@@ -299,23 +322,29 @@ def update_route_location(
 
     spatial_ref = route_desc.spatialReference
 
-    field_exists, correct_type = field_list_contains(
-        in_features_desc.fields, out_error_field)
+    def add_output_fields(field_name, field_type, **other_add_field_params):
+        field_exists, correct_type = field_list_contains(
+            in_features_desc.fields, field_name, field_type)
 
-    if not field_exists:
-        arcpy.management.AddField(
-            in_features, out_error_field, "STRING", field_alias="Locating Error")
-    elif not correct_type:
-        arcpy.AddError(
-            "Field '%s' already exists in table but is not the correct type." % out_error_field)
-    else:
-        arcpy.AddWarning(
-            "Field '%s' already exists and its data will be overwritten." % out_error_field)
+        if not field_exists:
+            arcpy.management.AddField(
+                in_features, field_name, field_type, **other_add_field_params)
+        elif not correct_type:
+            arcpy.AddError(
+                "Field '%s' already exists in table but is not the correct type." % field_name)
+        else:
+            arcpy.AddWarning(
+                "Field '%s' already exists and its data will be overwritten." % field_name)
+
+    # Locating Error field
+    add_output_fields(out_error_field, "TEXT", field_alias="Locating Error")
+    add_output_fields(distance_1_field, "DOUBLE", field_alias="Distance")
 
     update_fields = [in_features_route_id_field,
-                     "SHAPE@", out_error_field, measure_field]
+                     "SHAPE@", out_error_field, measure_field, distance_1_field]
     if end_measure_field:
-        update_fields.append(end_measure_field)
+        add_output_fields(distance_2_field, "DOUBLE", field_alias="End Distance")
+        update_fields += [end_measure_field, distance_2_field]
 
     # Get search cursor feature count
     result = arcpy.management.GetCount(in_features)
@@ -335,23 +364,30 @@ def update_route_location(
                 route_geometry = None
                 for route_row in route_cursor:
                     route_geometry = route_row[0]
-                    updated_geometry, m1, m2 = get_measures(
+                    updated_geometry, begin_info, end_info = get_measures(
                         event_geometry, route_geometry)
 
                     # the updated_geometry is not needed for this.
                     del updated_geometry
 
-                    if rounding_digits is not None:
-                        if m1:
-                            m1 = round(m1, rounding_digits)
-                        if m2:
-                            m2 = round(m2, rounding_digits)
                     # Geometry should not change, so no need to update it.
                     # row[1] = updated_geometry
+                    nearest_point, measure, distance, right_side = begin_info
+                    if rounding_digits is not None:
+                        measure = round(measure, rounding_digits)
+                    del nearest_point, right_side
                     row[2] = None
-                    row[3] = m1
+                    row[3], row[4] = measure, distance
+                    # row[3] = m1
+                    # row[5], row[4] = angle_dist1
                     if end_measure_field:
-                        row[4] = m2
+                        nearest_point, measure, distance, right_side = end_info
+                        del nearest_point, right_side
+
+                        if rounding_digits is not None:
+                            measure = round(measure, rounding_digits)
+                        row[-2] = measure
+                        row[-1] = distance
                     break
                 if not route_geometry:
                     row[2] = "Route not found: %s" % in_route_id
@@ -467,8 +503,9 @@ def points_to_line_events(in_features, in_routes, route_id_field, radius, out_ta
             arcpy.management.AlterField(end_events_table, field_name, new_name)
 
         # Join the temp table end point data to the output table containg the begin point events.
-        arcpy.management.JoinField(out_table, "SegmentId", end_events_table, "SegmentId", [
-                                   "EndRID", "EndMeasure", "EndDistance"])
+        arcpy.management.JoinField(
+            out_table, "SegmentId", end_events_table, "SegmentId", [
+                "EndRID", "EndMeasure", "EndDistance"])
 
     finally:
         for table in (events_layer, temp_events_table, end_events_table):
