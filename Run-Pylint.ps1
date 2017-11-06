@@ -45,7 +45,7 @@ categories has been issued by analysing pylint output status code
 #>
 function GetPythonFiles () {
     # Get list of files
-    $pyscripts = Get-ChildItem "src" -Recurse -Include *.py, *.pyt -Exclude "test*"
+    $pyscripts = Get-ChildItem "." -Recurse -Include *.py, *.pyt -Exclude @("test*", "setup*")
     # Make them relative paths
     $currentFolder = [System.IO.Path]::GetFullPath(".")
     $pyscripts = $pyscripts | ForEach-Object {
