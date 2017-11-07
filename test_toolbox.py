@@ -5,6 +5,7 @@ from __future__ import (unicode_literals, print_function, division,
 
 import unittest
 import os
+from zipfile import ZipFile
 try:
     import arcpy
 except ImportError:
@@ -14,6 +15,21 @@ except ImportError:
 class TestWsdotRoute(unittest.TestCase):
     """Unit tests
     """
+
+    @classmethod
+    def setUpClass(cls):
+        if arcpy:
+            # Unzip the sample data.
+            samples_dir = os.path.join(os.path.dirname(__file__), "Samples")
+            zip_path = os.path.join(samples_dir, "SampleData.gdb.zip")
+            gdb_path = os.path.join(samples_dir, "Sample.gdb")
+
+            # Upzip the zipped GDB, creating a clean copy of the
+            # GDB that was just deleted.
+            if os.path.exists(zip_path) and not os.path.exists(gdb_path):
+                with ZipFile(zip_path, "r") as zip_file:
+                    zip_file.extractall(samples_dir)
+
     def skip_if_no_arcpy(self):
         """Skips the current test if arcpy is not installed.
         Returns True if skipTest is called, False otherwise.

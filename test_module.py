@@ -4,6 +4,8 @@
 from __future__ import print_function, division, unicode_literals, absolute_import
 import unittest
 import os
+from shutil import rmtree
+from zipfile import ZipFile
 
 # arcpy is only available as part of the ArcGIS software and is not via pip
 # or other package managers.
@@ -26,6 +28,28 @@ else:
 class ModuleTest(unittest.TestCase):
     """Defines unit test test case.
     """
+
+    @classmethod
+    def setUpClass(cls):
+        if arcpy:
+            # Unzip the sample data.
+            samples_dir = os.path.join(os.path.dirname(__file__), "Samples")
+            zip_path = os.path.join(samples_dir, "SampleData.gdb.zip")
+            gdb_path = os.path.join(samples_dir, "Sample.gdb")
+
+            # Delete exising sample data GDB
+            if os.path.exists(gdb_path):
+                rmtree(gdb_path)
+
+            # Upzip the zipped GDB, creating a clean copy of the
+            # GDB that was just deleted.
+            if os.path.exists(zip_path):
+                with ZipFile(zip_path, "r") as zip_file:
+                    zip_file.extractall(samples_dir)
+
+    @classmethod
+    def tearDownClass(cls):
+        pass
 
     def skip_if_no_arcpy(self):
         """Skips the current test if arcpy is not installed.
