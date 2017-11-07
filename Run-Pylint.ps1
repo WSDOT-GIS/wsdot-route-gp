@@ -45,7 +45,7 @@ categories has been issued by analysing pylint output status code
 #>
 function GetPythonFiles () {
     # Get list of files
-    $pyscripts = Get-ChildItem "." -Recurse -Include *.py, *.pyt -Exclude @("test*", "setup*")
+    $pyscripts = Get-ChildItem ".\wsdotroute" -Recurse -Include *.py, *.pyt -Exclude @("test*", "setup*", "cleanup*", "build_package*")
     # Make them relative paths
     $currentFolder = [System.IO.Path]::GetFullPath(".")
     $pyscripts = $pyscripts | ForEach-Object {
@@ -75,7 +75,7 @@ try {
     Write-Host "Running pylint on $fileList..."
 
     # Start the Pylint process and wait
-    $process = Start-Process pylint ($fileList + " --output-format=json") -PassThru -NoNewWindow -RedirectStandardOutput $tempfile
+    $process = Start-Process pylint ($fileList + " --output-format=json -rn") -PassThru -NoNewWindow -RedirectStandardOutput $tempfile
 
     Wait-Process -InputObject $process
 

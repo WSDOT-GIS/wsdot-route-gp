@@ -15,6 +15,13 @@ Run Unit Tests
 python -m unittest
 ```
 
+Build packages
+--------------
+
+```console
+python build_package.py
+```
+
 Notes
 -----
 Functions are documented using the [Google Python Style Guide] format.

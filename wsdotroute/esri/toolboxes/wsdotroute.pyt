@@ -5,6 +5,9 @@ from __future__ import (absolute_import, division, print_function,
 import re
 import arcpy
 
+# pylint:disable=import-self,invalid-name,no-self-use,unused-argument,too-few-public-methods
+
+
 try:
     from wsdotroute import (add_standardized_route_id_field,
                             create_event_feature_class,
@@ -30,7 +33,6 @@ except ImportError:
                             points_to_line_event_features,
                             RouteIdSuffixType)
 
-# pylint:disable=invalid-name,no-self-use,unused-argument,too-few-public-methods,too-many-locals,too-many-branches
 
 _suffix_dict = {
     "NONE": RouteIdSuffixType.has_no_suffix,
@@ -86,6 +88,8 @@ class _LocateRouteEventsOrds(object):
 
 
 class Toolbox(object):
+    """Defines the toolbox
+    """
     def __init__(self):
         '''Define the toolbox (the name of the toolbox is the name of the
         .pyt file).'''
@@ -98,15 +102,17 @@ class Toolbox(object):
 
 
 class AddDirectionedRouteIdField(object):
+    """Defines the Add directioned route ID field tool.
+    """
     def __init__(self):
-        """
+        """Initializes the tool
         """
         self.label = 'Add directioned route ID field'
         self.descripiton = 'Adds a new field that combines WSDOT route ID and direction.'
         self.canRunInBackground = True
 
     def getParameterInfo(self):
-        """
+        """Defines the tool's parameters
         """
         table_param = arcpy.Parameter(
             "in_table", "In Table", "Input", "DETable", "Required")
@@ -204,6 +210,8 @@ class AddDirectionedRouteIdField(object):
 
 
 class LocateRouteEvents(object):
+    """Defines the Locate Route Events tool.
+    """
     def __init__(self):
         '''Define the tool (tool name is the name of the class).'''
         self.label = 'Locate Route Events'
@@ -387,6 +395,7 @@ class LocateRouteEvents(object):
 
 
 class UpdateRouteLocation(object):
+    """Defines the Update route location tool"""
     def __init__(self):
         '''Define the tool (tool name is the name of the class).'''
         self.label = 'Update route location'
@@ -477,6 +486,8 @@ class UpdateRouteLocation(object):
 
 
 class PointsToLineEvents(object):
+    """Defines the Points to Line Events tool.
+    """
     def __init__(self):
         '''Define the tool (tool name is the name of the class).'''
         self.label = 'Points to Line Events'
@@ -492,7 +503,6 @@ class PointsToLineEvents(object):
         in_features_param = arcpy.Parameter(
             'in_features', "Input Features", "Input", "GPFeatureLayer", "Required")
         in_features_param.filter.list = ["Point"]
-
 
         in_routes_param = arcpy.Parameter(
             "in_routes", "Route Layer", "Input", "GPFeatureLayer", "Required")
@@ -533,7 +543,10 @@ class PointsToLineEvents(object):
         points_to_line_events(*map(lambda p: p.valueAsText, parameters))
         return
 
+
 class PointsToLineEventFeatures(object):
+    """Defines the Points to Line Event features tool.
+    """
     def __init__(self):
         '''Define the tool (tool name is the name of the class).'''
         self.label = 'Points to Line Event Features'
@@ -549,7 +562,6 @@ class PointsToLineEventFeatures(object):
         in_features_param = arcpy.Parameter(
             'in_features', "Input Features", "Input", "GPFeatureLayer", "Required")
         in_features_param.filter.list = ["Point"]
-
 
         in_routes_param = arcpy.Parameter(
             "in_routes", "Route Layer", "Input", "GPFeatureLayer", "Required")
@@ -585,5 +597,6 @@ class PointsToLineEventFeatures(object):
 
     def execute(self, parameters, messages):
         '''The source code of the tool.'''
-        points_to_line_event_features(*map(lambda p: p.valueAsText, parameters))
+        points_to_line_event_features(
+            *map(lambda p: p.valueAsText, parameters))
         return

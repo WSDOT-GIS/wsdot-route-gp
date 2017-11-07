@@ -4,13 +4,8 @@
 from __future__ import (
     print_function, unicode_literals, division, absolute_import)
 import os
-import re
 import shutil
-import logging
 from subprocess import run, CalledProcessError
-
-# Packaging tools expects either README.txt, README, or README.rst.
-# Convert the README markdown file to ReStructured text.
 
 
 def copy_metadata():
@@ -40,6 +35,10 @@ def copy_metadata():
 
 
 def main():
+    """Builds the distribution files.
+    """
+    # Packaging tools expects either README.txt, README, or README.rst.
+    # Convert the README markdown file to ReStructured text.
     try:
         run("pandoc README.md -f markdown -t rst -o README.rst".split(" "), check=True)
     except CalledProcessError:
