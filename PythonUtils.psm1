@@ -150,7 +150,7 @@ class PackageInfo {
 
 function Get-PythonPackages {
     $pips = Get-PythonTool "pip.exe"
-    $output = New-Object [System.Collections.Generic.List[PackageInfo]]
+    $output = @()
     $originalLocation = Get-Location
     try {
         foreach ($pip in $pips) {
@@ -158,9 +158,8 @@ function Get-PythonPackages {
             $moduleList = pip list | Select-String -Pattern "^-" -NotMatch | Convert-String -Example "xlwt 1.2.0 =xlwt,1.2.0" | ConvertFrom-Csv
             foreach ($module in $moduleList) {
                 $pkInfo = New-Object PackageInfo @($module.Package, $module.Version, $pip)
-                $output.Add($pkInfo)
+                $output += $($pkInfo)
             }
-            # $output += $moduleList
         }
     }
     finally {
