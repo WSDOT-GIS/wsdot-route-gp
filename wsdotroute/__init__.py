@@ -288,7 +288,8 @@ def update_route_location(
         route_layer_route_id_field,
         measure_field,
         end_measure_field=None,
-        rounding_digits=None):
+        rounding_digits=None,
+        use_m_from_route_point=True):
     """Given input features, finds location nearest route.
 
     Args:
@@ -299,6 +300,8 @@ def update_route_location(
         measure_field: The field in the input features with begin measures (for lines) or a point's measure (for points).
         end_measure_field: The field in the input features with end measures (for lines). Not used if in_features are points.
         rounding_digits: The number of digits to round to.
+        use_m_from_route_point: If you want to use the M value from the nearest point (rather than the distance returned by
+        queryPointAndDistance) set to True. Otherwise, set to False
     """
 
     # Convert rounding digits to integer
@@ -373,16 +376,21 @@ def update_route_location(
                     # Geometry should not change, so no need to update it.
                     # row[1] = updated_geometry
                     nearest_point, measure, distance, right_side = begin_info
+                    if use_m_from_route_point:
+                        measure = nearest_point.firstPoint.M
                     if rounding_digits is not None:
                         measure = round(measure, rounding_digits)
-                    del nearest_point, right_side
+                    del right_side
                     row[2] = None
                     row[3], row[4] = measure, distance
                     # row[3] = m1
                     # row[5], row[4] = angle_dist1
                     if end_measure_field:
                         nearest_point, measure, distance, right_side = end_info
-                        del nearest_point, right_side
+                        del right_side
+
+                        if use_m_from_route_point:
+                            measure = nearest_point.firstPoint.M
 
                         if rounding_digits is not None:
                             measure = round(measure, rounding_digits)
@@ -390,7 +398,7 @@ def update_route_location(
                         row[-1] = distance
                     break
                 if not route_geometry:
-                    row[2] = "Route not found: %s" % in_route_id
+                    row[2] = "Route not found"
                     error_count += 1
             update_cursor.updateRow(row)
 
