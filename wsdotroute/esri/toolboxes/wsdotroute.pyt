@@ -447,11 +447,17 @@ class UpdateRouteLocation(object):
             "rounding_digits", "Number of digits for rounding", "Input", "Long", "Optional")
         rounding_digits_param.value = 3
 
+        use_m_from_route_point_param = arcpy.Parameter(
+            "use_m_from_route_point", "Use M from route point", "Input", "Boolean", "Optional"
+        )
+        use_m_from_route_point_param.value = True
+
         out_fc_param = arcpy.Parameter("out_fc", "Output Feature Class", "Output",
                                        "DEFeatureClass", "Derived")
 
         out_fc_param.parameterDependencies = [in_features_param.name]
         out_fc_param.schema.clone = True
+
 
         return [
             in_features_param,
@@ -461,6 +467,7 @@ class UpdateRouteLocation(object):
             measure_field_param,
             measure_field_2_param,
             rounding_digits_param,
+            use_m_from_route_point_param,
             out_fc_param,
         ]
 
