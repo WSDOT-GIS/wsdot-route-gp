@@ -346,7 +346,8 @@ def update_route_location(
     update_fields = [in_features_route_id_field,
                      "SHAPE@", out_error_field, measure_field, distance_1_field]
     if end_measure_field:
-        add_output_fields(distance_2_field, "DOUBLE", field_alias="End Distance")
+        add_output_fields(distance_2_field, "DOUBLE",
+                          field_alias="End Distance")
         update_fields += [end_measure_field, distance_2_field]
 
     # Get search cursor feature count
@@ -444,6 +445,8 @@ def copy_with_segment_ids(input_point_features, out_feature_class):
     with arcpy.da.UpdateCursor(out_feature_class, ("SegmentId", "IsEndPoint")) as cursor:
         # Need to iterate through row, but not actually use the variable itself
         for row in cursor:
+            # row is not actually used
+            del row
             i += 1
             is_end_point = False
             if i % 2 == 0:
@@ -453,6 +456,46 @@ def copy_with_segment_ids(input_point_features, out_feature_class):
             cursor.updateRow([segment_id, int(is_end_point)])
 
     return i + 1, segment_id + 1
+
+
+def _list_oids_of_non_matches(table, match_field1, match_field2):
+    """Returns a list of the OIDs of rows where the values in match_field1
+    and match_field2 do not match.
+    """
+    # Get a list of OIDs that need to be deleted.
+    # These are the rows where the begin and end route IDs do not match.
+    oids_to_be_deleted = []
+    with arcpy.da.SearchCursor(table, ["OID@", match_field1, match_field2]) as cursor:
+        for row in cursor:
+            oid, field1, field2 = row
+            if field1 != field2:
+                oids_to_be_deleted.append(oid)
+    return oids_to_be_deleted
+
+
+def _select_by_oids(table, oid_list):
+    """Creates a new table view and selects all rows with object IDs
+    that are in the input OID list.
+    """
+    # Return nothing if the OID list is empty or None.
+    if not oid_list:
+        return
+
+    # Create the name for the table view.
+    events_layer = split_path(arcpy.CreateScratchName(
+        "OutputEvents", workspace="in_memory"))[1]
+    arcpy.AddMessage(
+        "Rows with the following OIDs should be deleted: %s" % oid_list)
+    arcpy.AddMessage("Creating view %s on %s" % (events_layer, table))
+    arcpy.management.MakeTableView(table, events_layer)
+
+    # Get OID field name
+    oid_field = arcpy.ListFields(table, field_type="OID")[0]
+    oid_list = ",".join(map(str, oid_list))
+    arcpy.management.SelectLayerByAttribute(
+        events_layer, "NEW_SELECTION", "%s in (%s)" % (oid_field.name, oid_list))
+
+    return events_layer
 
 
 def points_to_line_events(in_features, in_routes, route_id_field, radius, out_table):
@@ -522,32 +565,19 @@ def points_to_line_events(in_features, in_routes, route_id_field, radius, out_ta
                 arcpy.management.Delete(table)
 
     # Get a list of OIDs that need to be deleted.
-    oids_to_be_deleted = []
-    with arcpy.da.SearchCursor(out_table, ["OID@", "RID", "EndRID"]) as cursor:
-        for row in cursor:
-            oid, rid1, rid2 = row
-            if rid1 != rid2:
-                oids_to_be_deleted.append(oid)
+    # These are the rows where the begin and end route IDs do not match.
+    oids_to_be_deleted = _list_oids_of_non_matches(
+        out_table, "RID", "EndRID")
 
     drop_end_rid_field = True
 
     # Delete rows from the output table where the start and end route IDs do not match
     if oids_to_be_deleted:
         try:
-            events_layer = split_path(arcpy.CreateScratchName(
-                "OutputEvents", workspace="in_memory"))[1]
-            arcpy.AddMessage(
-                "Rows with the following OIDs should be deleted: %s" % oids_to_be_deleted)
-            arcpy.AddMessage("Creating view %s on %s" %
-                             (events_layer, out_table))
-            arcpy.management.MakeTableView(out_table, events_layer)
-            # arcpy.management.SelectLayerByAttribute(events_layer, "NEW_SELECTION", "RID <> EndRID")
-            # Get OID field name
+            # # This didn't work for some reason, so now select rows for deletion using alternative method.
+            # # arcpy.management.SelectLayerByAttribute(events_layer, "NEW_SELECTION", "RID <> EndRID")
 
-            oid_field = arcpy.ListFields(out_table, field_type="OID")[0]
-            oid_list = ",".join(map(str, oids_to_be_deleted))
-            arcpy.management.SelectLayerByAttribute(
-                events_layer, "NEW_SELECTION", "%s in (%s)" % (oid_field.name, oid_list))
+            events_layer = _select_by_oids(out_table, oids_to_be_deleted)
 
             selected_row_count = _get_row_count(events_layer)
             drop_end_rid_field = True
